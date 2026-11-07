@@ -25,6 +25,16 @@ var _checking: Node = null
 var _audio: AudioStreamPlayer3D
 var _breath: AudioStreamPlayer3D
 var _body: Node3D
+var _torso: Node3D
+var _head: Node3D
+var _arms: Array = []
+var _legs: Array = []
+var _ear_mat: StandardMaterial3D
+var _rasp: AudioStreamPlayer3D
+var _stride := 0.0
+var _twitch_t := 0.0
+var _head_target := Vector3.ZERO
+var _last_pos := Vector3.ZERO
 var _time := 0.0
 
 
@@ -43,55 +53,105 @@ func setup(s: Node) -> void:
 	_breath.max_distance = 14.0
 	_breath.position.y = 2.0
 	add_child(_breath)
+	# A wet, rasping breath you hear before you see it.
+	_rasp = AudioStreamPlayer3D.new()
+	_rasp.stream = Sound.stream("listener_rasp")
+	_rasp.unit_size = 2.5
+	_rasp.max_distance = 16.0
+	_rasp.position.y = 2.2
+	_rasp.volume_db = -14.0 if Game.is_explorer() else -4.0
+	add_child(_rasp)
+	_rasp.play()
 
 
 func _build_body() -> void:
-	# Almost invisible: a tall, thin smudge of darkness. You notice it more by
-	# its clicking than by seeing it.
+	# Tall, starved and eyeless. It has no face, just rows of ear-slits that
+	# glow when it clicks. Long arms that nearly drag on the floor.
 	_body = Node3D.new()
 	add_child(_body)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.0, 0.0, 0.0, 0.55)
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.roughness = 0.2
-	mat.rim_enabled = true
-	mat.rim = 0.6
-	var torso := MeshInstance3D.new()
-	var cm := CapsuleMesh.new()
-	cm.radius = 0.3
-	cm.height = 2.2
-	torso.mesh = cm
-	torso.material_override = mat
-	torso.position.y = 1.25
-	_body.add_child(torso)
-	var head := MeshInstance3D.new()
-	var hm := SphereMesh.new()
-	hm.radius = 0.32
-	hm.height = 0.9
-	head.mesh = hm
-	head.material_override = mat
-	head.position.y = 2.45
-	head.rotation.x = 0.5
-	_body.add_child(head)
+	var skin := StandardMaterial3D.new()
+	skin.albedo_color = Color(0.07, 0.065, 0.07)
+	skin.roughness = 0.25
+	skin.metallic = 0.15
+	skin.rim_enabled = true
+	skin.rim = 0.8
+	skin.rim_tint = 0.2
+	_ear_mat = StandardMaterial3D.new()
+	var ear_color := Color(0.35, 0.55, 1.0) if Game.is_explorer() else Color(1.0, 0.18, 0.08)
+	_ear_mat.albedo_color = ear_color
+	_ear_mat.emission_enabled = true
+	_ear_mat.emission = ear_color
+	_ear_mat.emission_energy_multiplier = 0.6
+
+	# Legs: thigh forward, shin bending backwards like a bird's.
 	for side in [-1.0, 1.0]:
-		var arm := MeshInstance3D.new()
-		var am := CapsuleMesh.new()
-		am.radius = 0.06
-		am.height = 1.9
-		arm.mesh = am
-		arm.material_override = mat
-		arm.position = Vector3(0.38 * side, 1.25, 0.05)
-		arm.rotation.z = 0.12 * side
-		_body.add_child(arm)
+		var hip := Node3D.new()
+		hip.position = Vector3(0.16 * side, 1.35, 0)
+		_body.add_child(hip)
+		_limb(hip, 0.07, 0.75, Vector3(0, -0.3, 0.12), -0.35, skin)
+		var knee := Node3D.new()
+		knee.position = Vector3(0, -0.66, 0.24)
+		hip.add_child(knee)
+		_limb(knee, 0.055, 0.8, Vector3(0, -0.34, -0.12), 0.35, skin)
+		_legs.append(hip)
+
+	# Torso on a pivot so it can hunch forward when it hunts.
+	_torso = Node3D.new()
+	_torso.position.y = 1.35
+	_body.add_child(_torso)
+	_limb(_torso, 0.17, 1.05, Vector3(0, 0.5, 0), 0.0, skin)
+	for i in 6:   # ribs
+		var rib := MeshInstance3D.new()
+		var rm := BoxMesh.new()
+		rm.size = Vector3(0.34 - i * 0.02, 0.025, 0.24)
+		rib.mesh = rm
+		rib.material_override = skin
+		rib.position = Vector3(0, 0.45 + i * 0.09, 0.03)
+		_torso.add_child(rib)
+
+	# Long neck and an eyeless, stretched head.
+	_head = Node3D.new()
+	_head.position = Vector3(0, 1.08, 0.04)
+	_torso.add_child(_head)
+	_limb(_head, 0.05, 0.36, Vector3(0, 0.12, 0), 0.0, skin)
+	var skull := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.17
+	sm.height = 0.62
+	skull.mesh = sm
+	skull.material_override = skin
+	skull.position = Vector3(0, 0.42, 0.06)
+	skull.rotation.x = 0.35
+	_head.add_child(skull)
+	for side in [-1.0, 1.0]:      # ear-slits down each side of the head
+		for j in 4:
+			_slit(Vector3(0.15 * side, 0.3 + j * 0.08, 0.06 + j * 0.02), Vector3(0.012, 0.05, 0.06))
+	for j in 3:                    # and where a face should be
+		_slit(Vector3(0, 0.3 + j * 0.09, 0.22 + j * 0.02), Vector3(0.09 - j * 0.02, 0.012, 0.02))
+
+	# Arms on shoulder pivots, with long fingers.
+	for side in [-1.0, 1.0]:
+		var shoulder := Node3D.new()
+		shoulder.position = Vector3(0.24 * side, 0.98, 0)
+		_torso.add_child(shoulder)
+		_limb(shoulder, 0.045, 0.9, Vector3(0.04 * side, -0.42, 0), 0.08 * side, skin)
+		var elbow := Node3D.new()
+		elbow.position = Vector3(0.08 * side, -0.85, 0)
+		shoulder.add_child(elbow)
+		_limb(elbow, 0.038, 0.85, Vector3(0, -0.4, 0.04), -0.1, skin)
+		for f in 4:
+			_limb(elbow, 0.012, 0.38, Vector3((f - 1.5) * 0.03, -0.98, 0.06 + f * 0.01), (f - 1.5) * 0.12, skin)
+		_arms.append(shoulder)
+
 	var wisps := CPUParticles3D.new()
-	wisps.amount = 24
-	wisps.lifetime = 1.6
+	wisps.amount = 18
+	wisps.lifetime = 1.8
 	wisps.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	wisps.emission_sphere_radius = 0.5
+	wisps.emission_sphere_radius = 0.4
 	wisps.direction = Vector3.UP
 	wisps.spread = 40.0
-	wisps.initial_velocity_min = 0.1
-	wisps.initial_velocity_max = 0.4
+	wisps.initial_velocity_min = 0.05
+	wisps.initial_velocity_max = 0.25
 	wisps.gravity = Vector3.ZERO
 	wisps.scale_amount_min = 0.2
 	wisps.scale_amount_max = 0.5
@@ -100,12 +160,64 @@ func _build_body() -> void:
 	wm.height = 0.5
 	wisps.mesh = wm
 	var wmat := StandardMaterial3D.new()
-	wmat.albedo_color = Color(0, 0, 0, 0.3)
+	wmat.albedo_color = Color(0, 0, 0, 0.35)
 	wmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	wmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	wisps.material_override = wmat
-	wisps.position.y = 1.4
+	wisps.position.y = 0.3
 	_body.add_child(wisps)
+
+
+func _limb(parent: Node3D, radius: float, length: float, pos: Vector3, tilt: float, mat: Material) -> void:
+	var mi := MeshInstance3D.new()
+	var cm := CapsuleMesh.new()
+	cm.radius = radius
+	cm.height = maxf(length, radius * 2.0)
+	mi.mesh = cm
+	mi.material_override = mat
+	mi.position = pos
+	mi.rotation.z = tilt
+	parent.add_child(mi)
+
+
+func _slit(pos: Vector3, size: Vector3) -> void:
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	mi.mesh = bm
+	mi.material_override = _ear_mat
+	mi.position = pos
+	_head.add_child(mi)
+
+
+## Arms, legs, hunch and the twitchy head. Runs every frame.
+func _animate(delta: float, moving: bool, speed: float) -> void:
+	var hunting := state == State.HUNT
+	var listening := state == State.LISTEN or state == State.CHECK_LOCKER
+	_stride += delta * speed * 2.6 if moving else 0.0
+	var swing := sin(_stride) * (0.55 if moving else 0.0)
+	for i in _legs.size():
+		var leg: Node3D = _legs[i]
+		leg.rotation.x = lerpf(leg.rotation.x, swing * (1.0 if i == 0 else -1.0), minf(delta * 10.0, 1.0))
+	var hunch := 0.55 if hunting else (0.25 if listening else 0.12)
+	_torso.rotation.x = lerpf(_torso.rotation.x, hunch, minf(delta * 4.0, 1.0))
+	for i in _arms.size():
+		var arm: Node3D = _arms[i]
+		var reach := -1.1 if hunting else (-0.35 if listening else 0.0)
+		var want := reach + (-swing * 0.6 if i == 0 else swing * 0.6) * (0.4 if hunting else 1.0)
+		if hunting:
+			want += sin(_time * 9.0 + i) * 0.12   # fingers-out grasping twitch
+		arm.rotation.x = lerpf(arm.rotation.x, want, minf(delta * 8.0, 1.0))
+	# The head jerks: it holds still, then SNAPS to a new angle.
+	_twitch_t -= delta
+	if _twitch_t <= 0.0:
+		_twitch_t = randf_range(0.15, 0.5) if (hunting or listening) else randf_range(0.6, 1.8)
+		var tilt := 0.7 if listening else 0.35
+		_head_target = Vector3(randf_range(-0.3, 0.25), randf_range(-0.6, 0.6), randf_range(-tilt, tilt))
+	_head.rotation = _head.rotation.lerp(_head_target, minf(delta * 22.0, 1.0))
+	# The ear-slits flare with each click, then fade.
+	_ear_mat.emission_energy_multiplier = maxf(_ear_mat.emission_energy_multiplier - delta * 6.0, 0.6)
+	_body.position.y = sin(_time * 2.1) * 0.03
 
 
 func reset_to(pos: Vector3) -> void:
@@ -203,10 +315,11 @@ func _physics_process(delta: float) -> void:
 		_click_t = float(gap[state]) * randf_range(0.8, 1.2)
 		_audio.pitch_scale = randf_range(0.9, 1.15)
 		_audio.play()
+		_ear_mat.emission_energy_multiplier = 4.0 if state == State.HUNT else 2.5
 
-	# Gentle sway so the shape looks alive.
-	_body.rotation.z = sin(_time * 1.3) * 0.05
-	_body.position.y = sin(_time * 2.1) * 0.04
+	var moved := global_position.distance_to(_last_pos)
+	_last_pos = global_position
+	_animate(delta, moved > 0.0005, moved / maxf(delta, 0.0001))
 
 	# Caught?
 	if not player.hidden_in and not player.frozen:

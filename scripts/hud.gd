@@ -43,6 +43,9 @@ var _fade: ColorRect
 var _pause: Control
 var _pad: Control
 var _crosshair: Label
+var _dread: ColorRect
+var _dread_mat: ShaderMaterial
+var _dread_amount := 0.0
 
 var _lines: Array = []       # queued intercom lines: [style, text]
 var _line_shown := 0.0
@@ -61,6 +64,24 @@ func _ready() -> void:
 	_root.theme = Game.theme
 	add_child(_root)
 
+	_dread = ColorRect.new()
+	_dread.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_dread.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var dsh := Shader.new()
+	dsh.code = """
+shader_type canvas_item;
+uniform float amount = 0.0;
+void fragment() {
+	float d = distance(UV, vec2(0.5));
+	float pulse = 0.85 + 0.15 * sin(TIME * 7.0);
+	float edge = smoothstep(0.25, 0.75, d) * amount * pulse;
+	COLOR = vec4(0.25, 0.0, 0.0, edge * 0.9);
+}
+"""
+	_dread_mat = ShaderMaterial.new()
+	_dread_mat.shader = dsh
+	_dread.material = _dread_mat
+	_root.add_child(_dread)
 	_locker_view = _make_locker_view()
 	_root.add_child(_locker_view)
 
@@ -308,6 +329,11 @@ func _refresh_journal() -> void:
 	for c in _clues:
 		t += "- " + c + "\n"
 	_journal_text.text = t
+
+
+func set_dread(amount: float) -> void:
+	_dread_amount = lerpf(_dread_amount, amount, 0.1)
+	_dread_mat.set_shader_parameter("amount", _dread_amount)
 
 
 func set_meters(player: Node) -> void:

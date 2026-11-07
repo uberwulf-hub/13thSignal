@@ -81,7 +81,7 @@ godot --headless --path . res://tests/smoke_test.tscn
 
 ## Publishing to SauceStore
 
-This works the same way as Race Track Mayhem: `saucestore.json` is the store listing, and
+`saucestore.json` is the store listing, and
 `.github/workflows/release.yml` builds `The13thSignal-windows.zip` and publishes a GitHub release
 when you push a version tag (`git tag v0.1.0 && git push origin v0.1.0`).
 Before tagging, write what changed in `release-notes/<version>.md`, one change per line. SauceStore shows these

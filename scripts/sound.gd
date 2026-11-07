@@ -197,6 +197,35 @@ func _generate() -> void:
 		breath[i] = y * sin(PI * t / 1.4) * 2.2
 	_streams["listener_breath"] = _wav(breath)
 
+	# A rasping breath, looped (the envelope repeats exactly every 3 s).
+	var rasp := _buf(3.0)
+	var ry := 0.0
+	var ry2 := 0.0
+	for i in rasp.size():
+		var t := float(i) / RATE
+		ry += 0.25 * (randf_range(-1.0, 1.0) - ry)
+		ry2 += 0.5 * (ry - ry2)
+		var breath_env := pow(maxf(sin(TAU * t / 3.0), 0.0), 2.0) * 0.9 + pow(maxf(-sin(TAU * t / 3.0), 0.0), 3.0) * 0.5
+		var gurgle := 0.7 + 0.3 * sin(TAU * 31.0 * t) * sin(TAU * 7.0 * t)
+		rasp[i] = (ry - ry2) * 3.0 * breath_env * gurgle
+	_streams["listener_rasp"] = _wav(rasp, true)
+
+	# Its shriek when it starts hunting you (Survivor and Nightmare only):
+	# a falling, grinding cry. Loud, but just a sound.
+	var shriek := _buf(1.1)
+	var sp1 := 0.0
+	var sp2 := 0.0
+	for i in shriek.size():
+		var t := float(i) / RATE
+		var f := 1500.0 * exp(-t * 1.4) + 260.0
+		sp1 += f / RATE
+		sp2 += (f * 1.47) / RATE
+		var saw := (fmod(sp1, 1.0) * 2.0 - 1.0) * 0.5 + (fmod(sp2, 1.0) * 2.0 - 1.0) * 0.35
+		var grind := 0.6 + 0.4 * sin(TAU * 43.0 * t)
+		var env := minf(t / 0.02, 1.0) * exp(-t * 2.2)
+		shriek[i] = (saw * grind + randf_range(-0.25, 0.25)) * env * 0.45
+	_streams["shriek"] = _wav(shriek)
+
 	# The Replacement: creaking plastic.
 	var creak := _buf(0.5)
 	var phase := 0.0

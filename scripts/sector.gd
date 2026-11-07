@@ -832,6 +832,7 @@ func on_hunt_started() -> void:
 			hud.toast("It heard you! Move away quietly, or hide in a locker.", 3.0)
 	else:
 		Sound.play("heartbeat", -2.0)
+		Sound.play_at("shriek", listener.global_position + Vector3(0, 2.3, 0), 2.0, randf_range(0.9, 1.1))
 
 
 func on_locker_checked(locker: Node) -> void:
@@ -1067,6 +1068,7 @@ func _process(delta: float) -> void:
 				l["fixture"].visible = on
 
 	_check_player_cell()
+	_update_dread()
 
 	# Spot painted numbers (you have to actually see them).
 	_clue_t -= delta
@@ -1089,6 +1091,18 @@ func _process(delta: float) -> void:
 			var gap: Vector2 = Game.mode_data()["scare_gap"]
 			_event_t = randf_range(gap.x, gap.y)
 			_random_event()
+
+
+## The Listener close by: the screen edges darken and your flashlight flickers.
+## (Survivor and Nightmare only. Explorer stays calm.)
+func _update_dread() -> void:
+	var amount := 0.0
+	if not Game.is_explorer() and listener.is_physics_processing() and not catching:
+		var d := listener.global_position.distance_to(player.global_position)
+		amount = clampf(1.0 - (d - 2.0) / 8.0, 0.0, 1.0)
+		if amount > 0.3 and player.flashlight.visible and randf() < amount * 0.25:
+			player.flashlight.light_energy = randf_range(0.0, 0.8)
+	hud.set_dread(amount)
 
 
 func _check_player_cell() -> void:
