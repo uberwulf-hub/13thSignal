@@ -106,8 +106,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ inputs.version || github.ref_name }}
         run: |
+          # SauceStore turns each line of the notes into its Version history.
+          # Write them in release-notes/<version>.md; otherwise GitHub generates them.
+          NOTES="release-notes/$VERSION.md"
+          if [ -f "$NOTES" ]; then NOTE_ARGS=(--notes-file "$NOTES"); else NOTE_ARGS=(--generate-notes); fi
           gh release create "$VERSION" dist/The13thSignal-windows.zip \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "The 13th Signal $VERSION" \
-            --generate-notes
+            "${NOTE_ARGS[@]}"
