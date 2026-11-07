@@ -1,6 +1,11 @@
 extends Node3D
-## SECTOR 1: INTAKE. Builds the facility from the text map below, then runs
-## the story, puzzles, monsters, scares and checkpoints.
+## SECTOR 1: INTAKE, and the shared base for every sector.
+##
+## The base builds a facility from a text map and runs everything sectors
+## share: monsters (the Listener, the Replacement, ECHO), lockers, noise,
+## checkpoints, scares, catching and the end screen. Later sectors extend this
+## script and override the hooks marked "SECTOR HOOK" (map, rooms, puzzles,
+## story). Sector 1's own puzzles live in this file too.
 ##
 ## The escape route:
 ##   1. Find the maintenance note (Break Room): the breaker order.
@@ -19,6 +24,7 @@ const Hud := preload("res://scripts/hud.gd")
 const Door := preload("res://scripts/door.gd")
 const Locker := preload("res://scripts/locker.gd")
 const Interactable := preload("res://scripts/interactable.gd")
+const Echo := preload("res://scripts/echo.gd")
 
 const S := 3.0         # one map cell is 3 x 3 metres
 const WALL_H := 3.2
@@ -85,6 +91,17 @@ const FRAGMENT_TEXT := [
 	"\"Whatever you do, don't answer the signal. It learns your voice.\"",
 ]
 
+# --- What this sector is (later sectors change these) ---
+var sector_id := 1
+var sector_title := "SECTOR 1  -  INTAKE"
+var next_scene := "res://scenes/sector_2.tscn"
+var map: Array = MAP
+var rooms: Array = ROOMS
+var fragment_text: Array = FRAGMENT_TEXT
+var no_wander_rooms: Array = ["CRAWLSPACE", "ELEVATOR", ""]
+var has_replacement := false
+var echo_enabled := false
+
 var rows := 0
 var cols := 0
 var grid := AStarGrid2D.new()
@@ -92,6 +109,9 @@ var player: Player
 var listener: Listener
 var replacement: Replacement
 var hud: Hud
+var echo: Echo
+var trail: Array[Vector3] = []   # where you've walked, for ECHO to copy
+var _trail_t := 0.0
 
 var doors: Dictionary = {}       # Vector2i -> door
 var lockers: Array = []
@@ -141,9 +161,10 @@ var _hid_recently := 0.0
 
 func _ready() -> void:
 	Game.reset_run()
-	rows = MAP.size()
-	cols = String(MAP[0]).length()
-	_make_code()
+	_configure()
+	rows = map.size()
+	cols = String(map[0]).length()
+	_setup_puzzles()
 	_build_environment()
 	_build_level()
 	_build_grid()
@@ -160,6 +181,31 @@ func _ready() -> void:
 	_intro()
 
 
+## SECTOR HOOK: set sector_id, map, rooms, etc. (Sector 1 uses the defaults.)
+func _configure() -> void:
+	pass
+
+
+## SECTOR HOOK: prepare random puzzle answers before the level is built.
+func _setup_puzzles() -> void:
+	_make_code()
+
+
+## SECTOR HOOK: a map character the base doesn't know about.
+func _custom_cell(_k: String, _cell: Vector2i) -> void:
+	pass
+
+
+## SECTOR HOOK: map characters that monsters can't path through (at the start).
+func _solid_chars() -> Array:
+	return ["#", "V", "K", "X"]
+
+
+## SECTOR HOOK: the story text on the end screen.
+func _end_story() -> String:
+	return "The elevator goes down, not up.\nSomewhere below, a 13th sector that isn't on any map is still broadcasting."
+
+
 func _intro() -> void:
 	hud.set_objective("Find a way out of Sector 1.")
 	await get_tree().create_timer(1.6).timeout
@@ -173,7 +219,7 @@ func _intro() -> void:
 func ch(c: Vector2i) -> String:
 	if c.x < 0 or c.y < 0 or c.x >= cols or c.y >= rows:
 		return "#"
-	return String(MAP[c.y])[c.x]
+	return String(map[c.y])[c.x]
 
 
 func cell_to_world(c: Vector2i) -> Vector3:
@@ -185,7 +231,7 @@ func world_to_cell(p: Vector3) -> Vector2i:
 
 
 func room_at(c: Vector2i) -> String:
-	for r in ROOMS:
+	for r in rooms:
 		var rect: Rect2i = r[1]
 		if rect.has_point(c):
 			return r[0]
@@ -204,7 +250,7 @@ func nearest_wall(c: Vector2i) -> Array:
 				if n < int(best[1]):
 					best = [Vector3(-d.x, 0, -d.y), n]
 				break
-			if k in ["D", "K", "X", "V"]:
+			if k in ["D", "K", "X", "V", "a", "b", "c"]:
 				break
 			n += 1
 	return best
@@ -359,6 +405,7 @@ func _build_level() -> void:
 					listener_home = p
 				"R":
 					replacement_home = p
+					has_replacement = true
 				"g":
 					grates[cell] = true
 					_box(Vector3(S, 0.04, S), p + Vector3(0, 0.02, 0), grate_mat)
@@ -386,6 +433,8 @@ func _build_level() -> void:
 					_spawn_digit(cell, int(k) - 1)
 				"E":
 					_spawn_exit(cell)
+				_:
+					_custom_cell(k, cell)
 	_build_rooms(stripe_mat)
 
 
@@ -400,14 +449,14 @@ func _shape(body: StaticBody3D, size: Vector3, pos: Vector3) -> void:
 
 func _build_rooms(stripe_mat: Material) -> void:
 	var light_mult: float = [1.25, 1.0, 0.7][Game.mode]
-	for room in ROOMS:
+	for room in rooms:
 		var room_name: String = room[0]
 		var rect: Rect2i = room[1]
 		var center := Vector3((rect.position.x + (rect.size.x - 1) / 2.0) * S, 0, (rect.position.y + (rect.size.y - 1) / 2.0) * S)
 		# The room's name stencilled on the floor.
 		if room_name != "CRAWLSPACE":
 			var l := Label3D.new()
-			l.text = room_name if room_name != "MAIN HALL" else "SECTOR 1  -  INTAKE"
+			l.text = room_name if room_name != "MAIN HALL" else sector_title
 			l.font_size = 96
 			l.pixel_size = 0.008
 			l.modulate = Color(0.75, 0.8, 0.85, 0.35)
@@ -431,7 +480,7 @@ func _build_rooms(stripe_mat: Material) -> void:
 				light.light_color = Color(1.0, 0.85, 0.4)
 			add_child(light)
 			var fixture := _box(Vector3(1.2, 0.08, 0.3), pos + Vector3(0, 0.3, 0), _glow(Color(0.35, 0.5, 1.0), 1.5))
-			lights.append({"light": light, "fixture": fixture, "flicker": randf() < 0.3, "mult": light_mult})
+			lights.append({"light": light, "fixture": fixture, "flicker": randf() < 0.3, "mult": light_mult, "room": room_name})
 		# Pipes along the halls.
 		if room_name.ends_with("HALL"):
 			var pipe := MeshInstance3D.new()
@@ -467,9 +516,9 @@ func _build_grid() -> void:
 		for c in cols:
 			var cell := Vector2i(c, r)
 			var k := ch(cell)
-			if k in ["#", "V", "K", "X"]:
+			if k in _solid_chars():
 				grid.set_point_solid(cell, true)
-			elif not (room_at(cell) in ["CRAWLSPACE", "ELEVATOR", ""]):
+			elif not (room_at(cell) in no_wander_rooms):
 				wander_cells.append(cell)
 
 
@@ -620,11 +669,11 @@ func _spawn_fragment(cell: Vector2i) -> void:
 	it.prompt_text = "Take signal fragment"
 	it.on_use = func():
 		fragments += 1
-		Game.fragments_ever["s1_%d" % idx] = true
+		Game.fragments_ever["s%d_%d" % [sector_id, idx]] = true
 		Sound.play("pickup", -4.0, 0.8)
 		hud.set_fragments(fragments, fragment_total)
-		hud.show_note("SIGNAL FRAGMENT %d / %d" % [fragments, fragment_total], FRAGMENT_TEXT[idx % FRAGMENT_TEXT.size()])
-		hud.add_clue("Fragment: " + FRAGMENT_TEXT[idx % FRAGMENT_TEXT.size()])
+		hud.show_note("SIGNAL FRAGMENT %d / %d" % [fragments, fragment_total], fragment_text[idx % fragment_text.size()])
+		hud.add_clue("Fragment: " + fragment_text[idx % fragment_text.size()])
 		it.queue_free()
 
 
@@ -642,8 +691,8 @@ func _spawn_digit(cell: Vector2i, spot: int) -> void:
 
 
 func _spawn_exit(cell: Vector2i) -> void:
-	var p := cell_to_world(cell)
-	_label("EXIT", Vector3(p.x + S / 2.0 - 0.02, 2.2, p.z), Vector3(-1, 0, 0), 120, Color(1.0, 0.9, 0.3), 0.006)
+	var wp := wall_point(cell, 2.2)
+	_label("EXIT", wp[0], wp[1], 120, Color(1.0, 0.9, 0.3), 0.006)
 
 
 func _make_code() -> void:
@@ -679,6 +728,12 @@ func _spawn_actors() -> void:
 	replacement.global_position = replacement_home
 	replacement.setup(self)
 	replacement.rotation.y = PI / 2.0
+	replacement.visible = has_replacement
+
+	if echo_enabled:
+		echo = Echo.new()
+		add_child(echo)
+		echo.setup(self)
 
 
 func emit_noise(pos: Vector3, radius: float, from_player: bool) -> void:
@@ -744,12 +799,20 @@ func anyone_near(pos: Vector3, radius: float) -> bool:
 			if n == replacement and not replacement.active:
 				continue
 			return true
+	if echo and echo.visible and Vector2(echo.global_position.x - pos.x, echo.global_position.z - pos.z).length() < radius:
+		return true
 	return false
 
 
 # ================================================== learning (the Listener)
 
 func on_player_hid(_locker: Node) -> void:
+	if echo and (echo.active or not trail.is_empty()):
+		# ECHO can't copy a trail that stops inside a locker.
+		var was_following: bool = echo.active
+		echo.lose_trail(float(Game.mode_data()["echo_delay"]) * 0.6)
+		if was_following:
+			hud.toast("You broke your trail. ECHO lost you - for now.", 3.0)
 	if _hid_recently > 0.0:
 		return
 	_hid_recently = 15.0
@@ -825,6 +888,15 @@ func _spawn_trap(cell: Vector2i) -> void:
 	traps.append(area)
 
 
+## ECHO stepped out for the first time.
+func on_echo_appeared() -> void:
+	hud.say("ai", "Something just stepped out where you came in. It is walking exactly where you walked.")
+	hud.say("ai", "Keep moving. Do not go back the way you came. Hiding in a locker breaks your trail.")
+	hud.add_clue("ECHO walks exactly where you walked. Keep moving, don't double back, hide in a locker to lose it.")
+	if not Game.is_explorer():
+		Sound.play("heartbeat", -2.0)
+
+
 func on_hunt_started() -> void:
 	if Game.is_explorer():
 		if _hunt_warnings < 3:
@@ -892,6 +964,30 @@ func _power_on() -> void:
 	if Game.mode_data()["replacement_hunts"]:
 		await get_tree().create_timer(14.0).timeout
 		hud.say("ai", "The mannequin in Lab 2 was not there yesterday. If it moves, keep your light on it.")
+
+
+## SECTOR HOOK: the elevator door's prompt and what pressing E on it does.
+func exit_prompt(door: Node) -> String:
+	if door.unlocked:
+		return "Open elevator"
+	return "Elevator keypad" if power_on else "Elevator: no power"
+
+
+func exit_interact(door: Node) -> void:
+	if not power_on:
+		Sound.play_at("locked", door.global_position, -2.0)
+		hud.toast("The elevator has no power.")
+		return
+	open_keypad()
+
+
+## SECTOR HOOK: vault doors (Sector 2 and later).
+func vault_prompt(_door: Node) -> String:
+	return ""
+
+
+func vault_interact(_door: Node) -> void:
+	pass
 
 
 func open_keypad() -> void:
@@ -1014,7 +1110,12 @@ func on_caught(by: String) -> void:
 	paused_world = true
 	var soft := Game.is_explorer()
 	Sound.play("static", -12.0 if soft else -2.0)
-	var tip := "Tip: crouch to stay quiet, and avoid the metal grates." if by == "listener" else "Tip: it only moves when you can't see it. Keep your light on it."
+	var tips := {
+		"listener": "Tip: crouch to stay quiet, and avoid the metal grates.",
+		"replacement": "Tip: it only moves when you can't see it. Keep your light on it.",
+		"echo": "Tip: ECHO walks exactly where you walked. Keep moving, don't double back, and hide in a locker to break your trail.",
+	}
+	var tip: String = tips.get(by, "")
 	var text := ("IT FOUND YOU.\nBack to the last checkpoint.\n\n" + tip) if soft else ("SIGNAL LOST\n\n" + tip)
 	hud.show_caught(soft, text, _respawn)
 
@@ -1034,6 +1135,8 @@ func _respawn() -> void:
 			break
 	listener.reset_to(far)
 	replacement.reset_to(replacement_home)
+	if echo:
+		echo.lose_trail(Game.mode_data()["echo_delay"])
 	await get_tree().create_timer(0.8).timeout
 	player.frozen = false
 	paused_world = false
@@ -1069,6 +1172,7 @@ func _process(delta: float) -> void:
 
 	_check_player_cell()
 	_update_dread()
+	_record_trail(delta)
 
 	# Spot painted numbers (you have to actually see them).
 	_clue_t -= delta
@@ -1093,12 +1197,32 @@ func _process(delta: float) -> void:
 			_random_event()
 
 
+## Remember where you walk, so ECHO can walk it too.
+func _record_trail(delta: float) -> void:
+	if not echo_enabled or player.hidden_in or player.frozen:
+		return
+	_trail_t -= delta
+	if _trail_t > 0.0:
+		return
+	_trail_t = 0.15
+	var p := player.global_position
+	if trail.is_empty() or trail[trail.size() - 1].distance_to(p) > 0.4:
+		trail.append(p)
+
+
+## ECHO hid: hiding in a locker wipes your trail.
+func on_trail_broken() -> void:
+	trail.clear()
+
+
 ## The Listener close by: the screen edges darken and your flashlight flickers.
 ## (Survivor and Nightmare only. Explorer stays calm.)
 func _update_dread() -> void:
 	var amount := 0.0
 	if not Game.is_explorer() and listener.is_physics_processing() and not catching:
 		var d := listener.global_position.distance_to(player.global_position)
+		if echo and echo.visible:
+			d = minf(d, echo.global_position.distance_to(player.global_position) + 2.0)
 		amount = clampf(1.0 - (d - 2.0) / 8.0, 0.0, 1.0)
 		if amount > 0.3 and player.flashlight.visible and randf() < amount * 0.25:
 			player.flashlight.light_energy = randf_range(0.0, 0.8)
@@ -1185,10 +1309,12 @@ func _win() -> void:
 	player.frozen = true
 	Sound.play("power_on", -4.0, 0.7)
 	var mode_name := Game.mode_name()
-	var best: float = Game.best_times.get(mode_name, 0.0)
+	var best_key := mode_name if sector_id == 1 else "S%d %s" % [sector_id, mode_name]
+	var best: float = Game.best_times.get(best_key, 0.0)
 	var new_best := best == 0.0 or run_time < best
 	if new_best:
-		Game.best_times[mode_name] = run_time
+		Game.best_times[best_key] = run_time
+	Game.sector_unlocked = maxi(Game.sector_unlocked, sector_id + 1)
 	Game.save_settings()
 	var learned: Array[String] = []
 	if Game.learned_lockers:
@@ -1196,7 +1322,8 @@ func _win() -> void:
 	if Game.learned_traps:
 		learned.append("to set tripwires where you run")
 	var learned_text := "It never figured you out." if learned.is_empty() else "It learned " + " and ".join(learned) + "."
-	var body := "Mode: %s\nTime: %d:%02d%s\nTimes caught: %d\nSignal fragments: %d / %d\nThe Listener: %s\n\nThe elevator goes down, not up.\nSomewhere below, a 13th sector that isn't on any map is still broadcasting.\n\nTO BE CONTINUED IN SECTOR 2." % [
+	var body := "Mode: %s\nTime: %d:%02d%s\nTimes caught: %d\nSignal fragments: %d / %d\nThe Listener: %s\n\n%s" % [
 		mode_name, int(run_time) / 60, int(run_time) % 60, "  (new best!)" if new_best else "",
-		catches, fragments, fragment_total, learned_text]
-	hud.fade_out(1.5, func(): hud.show_end("SECTOR 1 CLEAR", body))
+		catches, fragments, fragment_total, learned_text, _end_story()]
+	var next := next_scene if ResourceLoader.exists(next_scene) else ""
+	hud.fade_out(1.5, func(): hud.show_end("SECTOR %d CLEAR" % sector_id, body, next))

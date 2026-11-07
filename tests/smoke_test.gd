@@ -95,6 +95,113 @@ func _ready() -> void:
 	s.note_sprint(s.player.global_position, 0.1)
 	check(Game.learned_traps and s.traps.size() == 3, "running a lot makes it set 3 tripwires")
 
+	s.queue_free()
+	await wait(0.3)
+	check(Game.sector_unlocked >= 2, "clearing Sector 1 unlocks Sector 2")
+
+	# --- Sector 2: the vault logic puzzle always has exactly one answer ---
+	var S2 = load("res://scripts/sector_2.gd")
+	var probe = S2.new()
+	var puzzle_ok := true
+	for n in 300:
+		probe.make_vault_puzzle()
+		var fits := 0
+		for v in 3:
+			if S2._true_count(probe.statements, v) == 1:
+				fits += 1
+		if fits != 1 or S2._true_count(probe.statements, probe.correct_vault) != 1:
+			puzzle_ok = false
+	probe.free()
+	check(puzzle_ok, "Sector 2's vault puzzle has exactly one answer (300 random games)")
+
+	# --- Sector 2 playthrough (Survivor) ---
+	s = load("res://scenes/sector_2.tscn").instantiate()
+	add_child(s)
+	await wait(1.0)
+	check(s.echo != null, "ECHO is in Sector 2")
+	check(s.lockers.size() == 6 and s.vault_doors.size() == 3, "Sector 2 built its lockers and vault doors")
+	var door_c = s.vault_doors[s.correct_vault]
+	s.vault_interact(door_c)
+	check(not door_c.unlocked, "vaults stay shut without power")
+	s.has_fuse = true
+	var panel = null
+	for c in s.get_children():
+		if c.get("prompt_text") == "Fuse panel (empty)":
+			panel = c
+	panel.interact(s.player)
+	check(s.vault_power, "the fuse powers the vault row")
+	var wrong = s.vault_doors[(s.correct_vault + 1) % 3]
+	s.vault_interact(wrong)
+	check(not wrong.unlocked, "the wrong vault stays shut")
+	s.vault_interact(door_c)
+	check(door_c.unlocked, "the right vault opens")
+	var drive = null
+	for c in s.get_children():
+		if c.get("prompt_text") == "Take the archive drive":
+			drive = c
+	check(drive != null, "the archive drive is inside the vault")
+	drive.interact(s.player)
+	check(s.has_drive, "you can take the drive")
+	var server = null
+	for c in s.get_children():
+		if c.get("prompt_text") == "Archive server: needs the archive drive":
+			server = c
+	server.interact(s.player)
+	check(s.exit_open and s.exit_door.is_open, "the drive in the server opens the elevator")
+
+	# ECHO: follows your trail and catches you if you stand still.
+	s.listener.set_physics_process(false)
+	s.listener.reset_to(s.cell_to_world(Vector2i(1, 9)))
+	s.trail.clear()
+	for x in range(2, 20):
+		s.trail.append(s.cell_to_world(Vector2i(x, 7)) + Vector3(0, 0, 0))
+	s.player.global_position = s.cell_to_world(Vector2i(20, 7))
+	s.echo.lose_trail(0.0)
+	for x in range(2, 20):
+		s.trail.append(s.cell_to_world(Vector2i(x, 7)))
+	var c0: int = s.catches
+	await wait(1.0)
+	check(s.echo.active and s.echo.visible, "ECHO steps out onto your trail")
+	var echo_start: Vector3 = s.echo.global_position
+	await wait(1.0)
+	check(s.echo.global_position.x > echo_start.x, "ECHO walks along your trail")
+	s.echo.global_position = s.player.global_position + Vector3(-3.0, 0, 0)
+	s.echo._idx = s.trail.size()
+	await wait(2.5)
+	check(s.catches == c0 + 1, "in Survivor, ECHO catches you if you stand still")
+	await wait(4.0)
+	s.trail.append(s.player.global_position)
+	s.trail.append(s.player.global_position + Vector3(1, 0, 0))
+	s.echo._wait = 0.0
+	s.player.enter_locker(s.lockers[0])
+	check(not s.echo.active and s.trail.is_empty(), "hiding in a locker breaks your trail")
+	s.player.leave_locker()
+	s.player.global_position = s.cell_to_world(Vector2i(24, 13))
+	await wait(1.0)
+	check(s.ended, "stepping into the elevator finishes Sector 2")
+	s.queue_free()
+	await wait(0.3)
+
+	# --- Explorer: ECHO never catches you ---
+	Game.lock_scary_modes()
+	s = load("res://scenes/sector_2.tscn").instantiate()
+	add_child(s)
+	await wait(1.0)
+	s.listener.reset_to(s.cell_to_world(Vector2i(25, 3)))
+	s.listener.set_physics_process(false)
+	s.visited["MAIN HALL"] = true
+	s.trail.clear()
+	for x in range(2, 10):
+		s.trail.append(s.cell_to_world(Vector2i(x, 7)))
+	s.player.global_position = s.cell_to_world(Vector2i(10, 7))
+	s.echo._wait = 0.0
+	await wait(0.5)
+	s.echo.global_position = s.player.global_position + Vector3(-2.0, 0, 0)
+	s.echo._idx = s.trail.size()
+	await wait(2.0)
+	check(s.catches == 0 and not s.echo.active, "in Explorer, ECHO glitches away instead of catching you")
+	s.queue_free()
+
 	Game.lock_scary_modes()
 	print("\n%s (%d failed)" % ["ALL PASSED" if failures == 0 else "SOME TESTS FAILED", failures])
 	get_tree().quit(1 if failures > 0 else 0)

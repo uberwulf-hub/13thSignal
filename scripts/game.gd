@@ -11,6 +11,12 @@ const PIN_SALT := "13th-signal/parent-lock/"
 
 enum Mode { EXPLORER, SURVIVOR, NIGHTMARE }
 
+## Every sector, in order: [title shown in the menu, scene].
+const SECTORS := [
+	["SECTOR 1: INTAKE", "res://scenes/sector.tscn"],
+	["SECTOR 2: ARCHIVES", "res://scenes/sector_2.tscn"],
+]
+
 ## Everything that changes between the three modes lives here.
 const MODES := [
 	{
@@ -22,6 +28,7 @@ const MODES := [
 		"replacement_hunts": false, "scares": false, "scare_gap": Vector2(70, 120),
 		"battery_drain": 0.6, "breath_drain": 10.0, "ambient": 0.12, "wrong_code_alarm": false,
 		"echo_hint": true,
+		"echo_delay": 40.0, "echo_speed": 1.7, "echo_catches": false,
 	},
 	{
 		"name": "SURVIVOR",
@@ -32,6 +39,7 @@ const MODES := [
 		"replacement_hunts": true, "scares": true, "scare_gap": Vector2(55, 100),
 		"battery_drain": 1.2, "breath_drain": 16.0, "ambient": 0.08, "wrong_code_alarm": false,
 		"echo_hint": false,
+		"echo_delay": 22.0, "echo_speed": 2.3, "echo_catches": true,
 	},
 	{
 		"name": "NIGHTMARE",
@@ -42,6 +50,7 @@ const MODES := [
 		"replacement_hunts": true, "scares": true, "scare_gap": Vector2(30, 65),
 		"battery_drain": 2.0, "breath_drain": 22.0, "ambient": 0.05, "wrong_code_alarm": true,
 		"echo_hint": false,
+		"echo_delay": 12.0, "echo_speed": 2.8, "echo_catches": true,
 	},
 ]
 
@@ -52,6 +61,7 @@ var brightness := 1.0
 var invert_y := false
 var best_times: Dictionary = {}      # mode name -> seconds
 var fragments_ever: Dictionary = {}  # fragment id -> true
+var sector_unlocked := 1             # the highest sector you can start from
 
 # --- Parent Lock (saved as a salted hash, never the PIN itself) ---
 var _pin_hash := ""
@@ -141,6 +151,7 @@ func load_settings() -> void:
 	invert_y = cfg.get_value("settings", "invert_y", invert_y)
 	best_times = cfg.get_value("progress", "best_times", {})
 	fragments_ever = cfg.get_value("progress", "fragments", {})
+	sector_unlocked = cfg.get_value("progress", "sector_unlocked", 1)
 	_pin_hash = cfg.get_value("parent", "pin_hash", "")
 	apply_volume()
 
@@ -153,6 +164,7 @@ func save_settings() -> void:
 	cfg.set_value("settings", "invert_y", invert_y)
 	cfg.set_value("progress", "best_times", best_times)
 	cfg.set_value("progress", "fragments", fragments_ever)
+	cfg.set_value("progress", "sector_unlocked", sector_unlocked)
 	cfg.set_value("parent", "pin_hash", _pin_hash)
 	cfg.save(SAVE_PATH)
 

@@ -58,7 +58,12 @@ func _ready() -> void:
 	_main_box = VBoxContainer.new()
 	_main_box.add_theme_constant_override("separation", 10)
 	col.add_child(_main_box)
-	_add_button(_main_box, "START  -  SECTOR 1: INTAKE", _start)
+	for i in Game.SECTORS.size():
+		var info: Array = Game.SECTORS[i]
+		var unlocked: bool = i + 1 <= Game.sector_unlocked
+		var label: String = "START  -  " + info[0] if unlocked else info[0] + "   (clear Sector %d first)" % i
+		var b := _add_button(_main_box, label, _start.bind(String(info[1])))
+		b.disabled = not unlocked
 	_mode_button = _add_button(_main_box, "", _cycle_mode)
 	_mode_blurb = Label.new()
 	_mode_blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -139,9 +144,9 @@ func _cycle_mode() -> void:
 			_pad.clear_entry())
 
 
-func _start() -> void:
+func _start(scene: String) -> void:
 	Sound.stop_ambient()
-	get_tree().change_scene_to_file("res://scenes/sector.tscn")
+	get_tree().change_scene_to_file(scene)
 
 
 # ----------------------------------------------------------------- options

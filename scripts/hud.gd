@@ -429,12 +429,14 @@ func toggle_pause() -> void:
 	])
 
 
-func show_end(title: String, body: String) -> void:
+func show_end(title: String, body: String, next_scene := "") -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_fade.color.a = 1.0
-	_menu_panel(title, body, [
-		["MAIN MENU", func(): get_tree().change_scene_to_file("res://scenes/main_menu.tscn")],
-	])
+	var buttons: Array = []
+	if next_scene != "":
+		buttons.append(["CONTINUE TO THE NEXT SECTOR", func(): get_tree().change_scene_to_file(next_scene)])
+	buttons.append(["MAIN MENU", func(): get_tree().change_scene_to_file("res://scenes/main_menu.tscn")])
+	_menu_panel(title, body, buttons)
 
 
 func _menu_panel(title: String, body: String, buttons: Array) -> Control:

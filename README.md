@@ -62,19 +62,38 @@ MERIDIAN at all.
    Look at them with your light and they go in your journal.
 5. Type the code at the elevator and step in.
 
-**Secrets:** 3 signal fragments are hidden in Sector 1. One is behind a low vent you have to crouch through.
+### Sector 2: Archives
+
+Clear Sector 1 to unlock it on the main menu, or press **CONTINUE** on Sector 1's end screen.
+
+- **ECHO** joins the Listener. A figure made of TV static steps out where you arrived and walks **exactly where
+  you walked**, a little slower than you walk. Stop for too long and it catches up. Go back the way you came and
+  you walk straight into it. **Hiding in a locker breaks your trail** and it fades away for a while. It also copies
+  MERIDIAN's voice, and it wants you to turn around. (In Explorer it never catches you. It just glitches away.)
+- **Puzzle:** find a fuse in Cold Storage (all loud metal grates) and power the vault row. Three record
+  terminals each say where the archive drive is. **Only one of them is really MERIDIAN telling the truth.**
+  Work out which vault it must be; the statements change every game. The wrong vault sets off an alarm.
+  Then take the drive to the archive server to unlock the elevator.
+- 3 more signal fragments, one behind a low vent.
+
+**Secrets:** 3 signal fragments are hidden in each sector. One is behind a low vent you have to crouch through.
 
 ## Run it from the source code
 
 1. Install **Godot 4.3** (standard version) from <https://godotengine.org/download>.
 2. Open Godot, click **Import**, choose this folder's `project.godot`, then press **F5** to play.
 
-Everything is built in code (`scripts/`). The map is a text drawing at the top of `scripts/sector.gd`,
-so you can redesign Sector 1 by editing the characters. The legend is right above it.
+Everything is built in code (`scripts/`). Each sector's map is a text drawing: Sector 1's is at the top of
+`scripts/sector.gd` and Sector 2's at the top of `scripts/sector_2.gd`. Redesign a sector by editing the
+characters; the legend is right above each map.
+
+`scripts/sector.gd` is also the shared base for every sector: monsters, lockers, noise, checkpoints, scares
+and the end screen. A new sector is a script that `extends` it and overrides the hooks marked
+`SECTOR HOOK` (map, rooms, puzzles, story), plus a line in `Game.SECTORS` in `scripts/game.gd`.
 All sounds are synthesized in `scripts/sound.gd`, so there are no audio files to license.
 
 **Automated test:** this plays through the sector and checks the Parent Lock, the puzzles, getting caught,
-the checkpoints, and the monster's learning:
+the checkpoints, the monster's learning, and Sector 2's vaults and ECHO:
 ```
 godot --headless --path . res://tests/smoke_test.tscn
 ```
@@ -91,8 +110,7 @@ The store reads `saucestore.json` from the release's tag, so listing edits go li
 
 ## Where it goes next
 
-- **Sectors 2 to 12**, each with its own puzzle style and a new trick for the monsters.
-- **ECHO as a full monster.** It copies other characters' voices, and even repeats your own choices back at you.
+- **Sectors 3 to 12**, each with its own puzzle style and a new trick for the monsters.
 - **SUBJECT 13**, the final boss. You only see the whole thing at the end, and you beat it with puzzle mechanics, not firepower.
 - **13 signal fragments** across the game that unlock the true ending.
 - Voice acting for MERIDIAN and ECHO, real recorded sound effects, more rooms and props.

@@ -15,6 +15,7 @@ var stay_open := false
 var panel: MeshInstance3D
 var shape: CollisionShape3D
 var display: Label3D    # the exit door's code-order screen
+var vault_letter := ""  # "A", "B" or "C" for vault doors
 var _close_t := 0.0
 var _tween: Tween
 
@@ -27,7 +28,7 @@ func setup(s: Node, c: Vector2i, along_x: bool, k: String) -> void:
 	collision_mask = 0
 	if not along_x:
 		rotation.y = PI / 2.0
-	var colors := {"door": Color(0.22, 0.26, 0.3), "keycard": Color(0.35, 0.22, 0.12), "exit": Color(0.32, 0.3, 0.12)}
+	var colors := {"door": Color(0.22, 0.26, 0.3), "keycard": Color(0.35, 0.22, 0.12), "exit": Color(0.32, 0.3, 0.12), "vault": Color(0.2, 0.24, 0.22)}
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = colors[kind]
 	mat.metallic = 0.6
@@ -45,7 +46,7 @@ func setup(s: Node, c: Vector2i, along_x: bool, k: String) -> void:
 	sm.size = Vector3(S * 0.9, 0.08, 0.34)
 	stripe.mesh = sm
 	var smat := StandardMaterial3D.new()
-	var glow := {"door": Color(0.3, 0.7, 1.0), "keycard": Color(1.0, 0.55, 0.1), "exit": Color(1.0, 0.9, 0.2)}
+	var glow := {"door": Color(0.3, 0.7, 1.0), "keycard": Color(1.0, 0.55, 0.1), "exit": Color(1.0, 0.9, 0.2), "vault": Color(0.4, 1.0, 0.6)}
 	smat.albedo_color = glow[kind]
 	smat.emission_enabled = true
 	smat.emission = glow[kind]
@@ -55,7 +56,7 @@ func setup(s: Node, c: Vector2i, along_x: bool, k: String) -> void:
 	panel.add_child(stripe)
 	if kind != "door":
 		var door_sign := Label3D.new()
-		door_sign.text = "SECURITY\nKEYCARD ONLY" if kind == "keycard" else "SERVICE ELEVATOR"
+		door_sign.text = {"keycard": "SECURITY\nKEYCARD ONLY", "exit": "SERVICE ELEVATOR", "vault": "VAULT " + vault_letter}[kind]
 		door_sign.font_size = 48
 		door_sign.pixel_size = 0.004
 		door_sign.modulate = glow[kind]
@@ -103,9 +104,9 @@ func prompt() -> String:
 		"keycard":
 			return "Open security door" if (unlocked or sector.has_keycard) else "Locked: security keycard needed"
 		"exit":
-			if unlocked:
-				return "Open elevator"
-			return "Elevator keypad" if sector.power_on else "Elevator: no power"
+			return sector.exit_prompt(self)
+		"vault":
+			return sector.vault_prompt(self)
 	return "Open door"
 
 
@@ -124,11 +125,11 @@ func interact(_player: Node) -> void:
 				Sound.play("pickup", -10.0)
 		"exit":
 			if not unlocked:
-				if not sector.power_on:
-					Sound.play_at("locked", global_position, -2.0)
-					sector.hud.toast("The elevator has no power.")
-					return
-				sector.open_keypad()
+				sector.exit_interact(self)
+				return
+		"vault":
+			if not unlocked:
+				sector.vault_interact(self)
 				return
 	open(true)
 
