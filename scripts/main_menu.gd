@@ -81,7 +81,7 @@ func _ready() -> void:
 	push.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	col.add_child(push)
 	var advisory := Label.new()
-	advisory.text = "No blood or gore. Scares come from sound, darkness and surprise.   Controls: WASD move  |  Shift run  |  Ctrl crouch  |  E use  |  F flashlight  |  Space hold breath  |  Tab journal"
+	advisory.text = "No blood or gore. Scares come from sound, darkness and surprise.   Controls: WASD move  |  Shift run  |  Ctrl crouch  |  E use  |  F flashlight  |  Space hold breath  |  R turn relay  |  Tab journal"
 	advisory.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	advisory.add_theme_font_size_override("font_size", 14)
 	advisory.add_theme_color_override("font_color", Color(0.4, 0.55, 0.65))

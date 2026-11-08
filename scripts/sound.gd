@@ -226,6 +226,20 @@ func _generate() -> void:
 		shriek[i] = (saw * grind + randf_range(-0.25, 0.25)) * env * 0.45
 	_streams["shriek"] = _wav(shriek)
 
+	# ECHO's whisper: breathy noise shaped into syllables, looped every 4 s.
+	var whisper := _buf(4.0)
+	var wy := 0.0
+	var wy2 := 0.0
+	for i in whisper.size():
+		var t := float(i) / RATE
+		wy += 0.7 * (randf_range(-1.0, 1.0) - wy)
+		wy2 += 0.35 * (wy - wy2)
+		var hiss := wy - wy2 * 0.6
+		var syll := maxf(sin(TAU * 2.75 * t) * sin(TAU * 0.5 * t), 0.0)
+		var formant := 0.6 + 0.4 * sin(TAU * (900.0 + 400.0 * sin(TAU * 0.75 * t)) * t)
+		whisper[i] = hiss * syll * formant * 0.5
+	_streams["echo_whisper"] = _wav(whisper, true)
+
 	# The Replacement: creaking plastic.
 	var creak := _buf(0.5)
 	var phase := 0.0

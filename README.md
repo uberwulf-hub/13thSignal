@@ -40,6 +40,7 @@ MERIDIAN at all.
 | Use / open / hide | E | A |
 | Flashlight | F | Y |
 | Hold your breath (in a locker) | Space (hold) | X (hold) |
+| Turn a relay (Sector 3) | R | Right bumper |
 | Journal (clues) | Tab or J (hold) | Back/View |
 | Pause | Esc | Start |
 
@@ -76,6 +77,21 @@ Clear Sector 1 to unlock it on the main menu, or press **CONTINUE** on Sector 1'
   Then take the drive to the archive server to unlock the elevator.
 - 3 more signal fragments, one behind a low vent.
 
+### Sector 3: Relay Station
+
+Signal-relay puzzles. Transmitters shoot a beam of signal in a straight line. Pick up relays (**E**), put them
+down (**E**) and turn them (**R**): a beam that reaches a relay leaves the way its arrow points. Get each beam into
+its receiver. Beams go through glass, but you can't. Each receiver needs its own colour, and a relay hit by two
+colours jams.
+
+- **Relay Lab 1** teaches it, **Lab 2** hides the receiver behind glass, and **Lab 3** has red and blue beams.
+  Each lab opens the gate to the next; Lab 3 opens the elevator.
+- **The labs are shielded.** ECHO can't follow you in; it waits at the door. In Explorer, no monster can enter a lab.
+- **ECHO is scarier** from here on (and in Sector 2): black empty eyes and a mouth that opens as it gets close,
+  a head that snaps round to stare at you, a whisper you hear before you see it, and sometimes your own voice.
+  In Survivor and Nightmare it also stretches taller and reaches for you, lurches forward along your trail,
+  and fills the screen with static up close.
+
 **Secrets:** 3 signal fragments are hidden in each sector. One is behind a low vent you have to crouch through.
 
 ## Run it from the source code
@@ -83,8 +99,8 @@ Clear Sector 1 to unlock it on the main menu, or press **CONTINUE** on Sector 1'
 1. Install **Godot 4.3** (standard version) from <https://godotengine.org/download>.
 2. Open Godot, click **Import**, choose this folder's `project.godot`, then press **F5** to play.
 
-Everything is built in code (`scripts/`). Each sector's map is a text drawing: Sector 1's is at the top of
-`scripts/sector.gd` and Sector 2's at the top of `scripts/sector_2.gd`. Redesign a sector by editing the
+Everything is built in code (`scripts/`). Each sector's map is a text drawing at the top of its script
+(`scripts/sector.gd`, `scripts/sector_2.gd`, `scripts/sector_3.gd`). Redesign a sector by editing the
 characters; the legend is right above each map.
 
 `scripts/sector.gd` is also the shared base for every sector: monsters, lockers, noise, checkpoints, scares
@@ -93,7 +109,7 @@ and the end screen. A new sector is a script that `extends` it and overrides the
 All sounds are synthesized in `scripts/sound.gd`, so there are no audio files to license.
 
 **Automated test:** this plays through the sector and checks the Parent Lock, the puzzles, getting caught,
-the checkpoints, the monster's learning, and Sector 2's vaults and ECHO:
+the checkpoints, the monster's learning, Sector 2's vaults and ECHO, and Sector 3's relay labs:
 ```
 godot --headless --path . res://tests/smoke_test.tscn
 ```
@@ -110,7 +126,7 @@ The store reads `saucestore.json` from the release's tag, so listing edits go li
 
 ## Where it goes next
 
-- **Sectors 3 to 12**, each with its own puzzle style and a new trick for the monsters.
+- **Sectors 4 to 12**, each with its own puzzle style and a new trick for the monsters (next: portable jammers).
 - **SUBJECT 13**, the final boss. You only see the whole thing at the end, and you beat it with puzzle mechanics, not firepower.
 - **13 signal fragments** across the game that unlock the true ending.
 - Voice acting for MERIDIAN and ECHO, real recorded sound effects, more rooms and props.

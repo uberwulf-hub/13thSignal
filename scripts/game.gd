@@ -15,6 +15,7 @@ enum Mode { EXPLORER, SURVIVOR, NIGHTMARE }
 const SECTORS := [
 	["SECTOR 1: INTAKE", "res://scenes/sector.tscn"],
 	["SECTOR 2: ARCHIVES", "res://scenes/sector_2.tscn"],
+	["SECTOR 3: RELAY STATION", "res://scenes/sector_3.tscn"],
 ]
 
 ## Everything that changes between the three modes lives here.
@@ -182,11 +183,12 @@ func _setup_input() -> void:
 		"sprint": [KEY_SHIFT], "crouch": [KEY_CTRL, KEY_C],
 		"interact": [KEY_E], "flashlight": [KEY_F], "hold_breath": [KEY_SPACE],
 		"journal": [KEY_TAB, KEY_J], "pause": [KEY_ESCAPE, KEY_P],
+		"rotate": [KEY_R],
 	}
 	var pad_buttons := {
 		"interact": JOY_BUTTON_A, "crouch": JOY_BUTTON_B, "flashlight": JOY_BUTTON_Y,
 		"journal": JOY_BUTTON_BACK, "pause": JOY_BUTTON_START, "sprint": JOY_BUTTON_LEFT_STICK,
-		"hold_breath": JOY_BUTTON_X,
+		"hold_breath": JOY_BUTTON_X, "rotate": JOY_BUTTON_RIGHT_SHOULDER,
 	}
 	var pad_axes := {
 		"move_left": [JOY_AXIS_LEFT_X, -1.0], "move_right": [JOY_AXIS_LEFT_X, 1.0],
@@ -195,7 +197,7 @@ func _setup_input() -> void:
 		"look_up": [JOY_AXIS_RIGHT_Y, -1.0], "look_down": [JOY_AXIS_RIGHT_Y, 1.0],
 	}
 	for action in ["move_forward", "move_back", "move_left", "move_right", "sprint", "crouch",
-			"interact", "flashlight", "hold_breath", "journal", "pause",
+			"interact", "flashlight", "hold_breath", "journal", "pause", "rotate",
 			"look_left", "look_right", "look_up", "look_down"]:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action, 0.2)

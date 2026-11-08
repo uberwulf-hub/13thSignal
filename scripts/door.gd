@@ -28,7 +28,7 @@ func setup(s: Node, c: Vector2i, along_x: bool, k: String) -> void:
 	collision_mask = 0
 	if not along_x:
 		rotation.y = PI / 2.0
-	var colors := {"door": Color(0.22, 0.26, 0.3), "keycard": Color(0.35, 0.22, 0.12), "exit": Color(0.32, 0.3, 0.12), "vault": Color(0.2, 0.24, 0.22)}
+	var colors := {"door": Color(0.22, 0.26, 0.3), "keycard": Color(0.35, 0.22, 0.12), "exit": Color(0.32, 0.3, 0.12), "vault": Color(0.2, 0.24, 0.22), "gate": Color(0.22, 0.18, 0.3)}
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = colors[kind]
 	mat.metallic = 0.6
@@ -46,7 +46,7 @@ func setup(s: Node, c: Vector2i, along_x: bool, k: String) -> void:
 	sm.size = Vector3(S * 0.9, 0.08, 0.34)
 	stripe.mesh = sm
 	var smat := StandardMaterial3D.new()
-	var glow := {"door": Color(0.3, 0.7, 1.0), "keycard": Color(1.0, 0.55, 0.1), "exit": Color(1.0, 0.9, 0.2), "vault": Color(0.4, 1.0, 0.6)}
+	var glow := {"door": Color(0.3, 0.7, 1.0), "keycard": Color(1.0, 0.55, 0.1), "exit": Color(1.0, 0.9, 0.2), "vault": Color(0.4, 1.0, 0.6), "gate": Color(0.75, 0.45, 1.0)}
 	smat.albedo_color = glow[kind]
 	smat.emission_enabled = true
 	smat.emission = glow[kind]
@@ -56,7 +56,7 @@ func setup(s: Node, c: Vector2i, along_x: bool, k: String) -> void:
 	panel.add_child(stripe)
 	if kind != "door":
 		var door_sign := Label3D.new()
-		door_sign.text = {"keycard": "SECURITY\nKEYCARD ONLY", "exit": "SERVICE ELEVATOR", "vault": "VAULT " + vault_letter}[kind]
+		door_sign.text = {"keycard": "SECURITY\nKEYCARD ONLY", "exit": "SERVICE ELEVATOR", "vault": "VAULT " + vault_letter, "gate": "SIGNAL GATE"}[kind]
 		door_sign.font_size = 48
 		door_sign.pixel_size = 0.004
 		door_sign.modulate = glow[kind]
@@ -107,6 +107,8 @@ func prompt() -> String:
 			return sector.exit_prompt(self)
 		"vault":
 			return sector.vault_prompt(self)
+		"gate":
+			return sector.gate_prompt(self)
 	return "Open door"
 
 
@@ -130,6 +132,10 @@ func interact(_player: Node) -> void:
 		"vault":
 			if not unlocked:
 				sector.vault_interact(self)
+				return
+		"gate":
+			if not unlocked:
+				sector.gate_interact(self)
 				return
 	open(true)
 

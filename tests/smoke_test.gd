@@ -18,6 +18,10 @@ func wait(t: float) -> void:
 
 
 func _ready() -> void:
+	# If a script error stops the test partway, give up instead of hanging forever.
+	get_tree().create_timer(300.0).timeout.connect(func():
+		print("FAIL  the test timed out (a script error probably stopped it)")
+		get_tree().quit(1))
 	# --- Parent Lock ---
 	Game.lock_scary_modes()
 	check(Game.mode == Game.Mode.EXPLORER, "the game starts in Explorer")
@@ -201,6 +205,75 @@ func _ready() -> void:
 	await wait(2.0)
 	check(s.catches == 0 and not s.echo.active, "in Explorer, ECHO glitches away instead of catching you")
 	s.queue_free()
+
+	await wait(0.3)
+	check(Game.sector_unlocked >= 3, "clearing Sector 2 unlocks Sector 3")
+
+	# --- Sector 3: relay labs (Survivor) ---
+	Game.scary_unlocked = true
+	Game.mode = Game.Mode.SURVIVOR
+	s = load("res://scenes/sector_3.tscn").instantiate()
+	add_child(s)
+	await wait(1.0)
+	s.listener.set_physics_process(false)
+	s.listener.reset_to(s.cell_to_world(Vector2i(28, 8)))
+	check(s.relays.size() == 8, "Sector 3 has 8 relays")
+	check(s.powered.is_empty(), "no receiver is lit at the start")
+	var rl = s.relays[0]
+	s.player.global_position = s.cell_to_world(Vector2i(9, 3))
+	s.pick_up(rl)
+	check(s.player.carrying == rl, "you can pick up a relay")
+	s._put(rl, Vector2i(13, 2))
+	rl.set_facing(1)
+	s.update_beams()
+	check(s.solved.has("RELAY LAB 1"), "Lab 1: one relay turns the beam into the receiver")
+	check(s.gates[Vector2i(20, 6)].is_open, "solving Lab 1 opens Lab 2's gate")
+	var lab2 = [[Vector2i(16, 2), 0], [Vector2i(19, 2), 1], [Vector2i(19, 3), 0]]
+	for i in 3:
+		var r2 = s.relays[1 + i]
+		s._put(r2, lab2[i][0])
+		r2.set_facing(lab2[i][1])
+	s.update_beams()
+	check(s.solved.has("RELAY LAB 2"), "Lab 2: the beam goes through the glass to the receiver")
+	check(s.gates[Vector2i(6, 10)].is_open, "solving Lab 2 opens Lab 3's gate")
+	# Jam: one relay hit by both colours sends nothing.
+	var j = s.relays[4]
+	s._put(j, Vector2i(10, 15))
+	j.set_facing(3)
+	var j2 = s.relays[5]
+	s._put(j2, Vector2i(10, 11))
+	j2.set_facing(1)
+	s.update_beams()
+	check(not s.solved.has("RELAY LAB 3"), "a relay hit by red and blue jams")
+	var lab3 = [[Vector2i(10, 11), 1], [Vector2i(10, 13), 0], [Vector2i(3, 15), 3], [Vector2i(3, 13), 2]]
+	for i in 4:
+		var r3 = s.relays[4 + i]
+		s._put(r3, lab3[i][0])
+		r3.set_facing(lab3[i][1])
+	s.update_beams()
+	check(s.solved.has("RELAY LAB 3") and s.exit_open, "Lab 3: red and blue reach their receivers and open the elevator")
+	# ECHO can't follow into a lab.
+	s.player.global_position = s.cell_to_world(Vector2i(5, 13))
+	await wait(0.2)
+	check(s.trail_shielded(), "the labs are shielded")
+	var before_trail: int = s.trail.size()
+	await wait(0.6)
+	check(s.trail.size() == before_trail, "your trail isn't recorded inside a lab")
+	s.player.global_position = s.cell_to_world(Vector2i(29, 13))
+	await wait(1.0)
+	check(s.ended, "stepping into the elevator finishes Sector 3")
+	s.queue_free()
+	await wait(0.3)
+
+	# --- Explorer: monsters can't walk into the labs ---
+	Game.lock_scary_modes()
+	s = load("res://scenes/sector_3.tscn").instantiate()
+	add_child(s)
+	await wait(0.8)
+	var into_lab: Array = s.find_path(s.cell_to_world(Vector2i(15, 8)), s.cell_to_world(Vector2i(10, 3)))
+	check(into_lab.is_empty(), "in Explorer, monsters can't path into the relay labs")
+	s.queue_free()
+	await wait(0.3)
 
 	Game.lock_scary_modes()
 	print("\n%s (%d failed)" % ["ALL PASSED" if failures == 0 else "SOME TESTS FAILED", failures])

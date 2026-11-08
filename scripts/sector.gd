@@ -990,6 +990,38 @@ func vault_interact(_door: Node) -> void:
 	pass
 
 
+## SECTOR HOOK: signal gates (Sector 3 and later).
+func gate_prompt(_door: Node) -> String:
+	return "Signal gate: no signal"
+
+
+func gate_interact(door: Node) -> void:
+	Sound.play_at("locked", door.global_position, -2.0)
+
+
+## SECTOR HOOK: carrying things (Sector 3's relays).
+func try_place() -> void:
+	pass
+
+
+func turn_carried() -> void:
+	pass
+
+
+func carry_prompt() -> String:
+	return ""
+
+
+## SECTOR HOOK: you got caught while carrying something.
+func drop_carried() -> void:
+	pass
+
+
+## SECTOR HOOK: true while you're somewhere ECHO can't follow (shielded rooms).
+func trail_shielded() -> bool:
+	return false
+
+
 func open_keypad() -> void:
 	player.frozen = true
 	hud.open_keypad(_on_code, close_keypad)
@@ -1106,6 +1138,8 @@ func on_caught(by: String) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	if player.hidden_in:
 		player.leave_locker()
+	if player.carrying:
+		drop_carried()
 	player.frozen = true
 	paused_world = true
 	var soft := Game.is_explorer()
@@ -1199,7 +1233,7 @@ func _process(delta: float) -> void:
 
 ## Remember where you walk, so ECHO can walk it too.
 func _record_trail(delta: float) -> void:
-	if not echo_enabled or player.hidden_in or player.frozen:
+	if not echo_enabled or player.hidden_in or player.frozen or trail_shielded():
 		return
 	_trail_t -= delta
 	if _trail_t > 0.0:
@@ -1227,6 +1261,11 @@ func _update_dread() -> void:
 		if amount > 0.3 and player.flashlight.visible and randf() < amount * 0.25:
 			player.flashlight.light_energy = randf_range(0.0, 0.8)
 	hud.set_dread(amount)
+	var fuzz := 0.0
+	if not Game.is_explorer() and echo and echo.visible and not catching:
+		# ECHO is made of static, and up close it gets into your eyes too.
+		fuzz = clampf(1.0 - (echo.global_position.distance_to(player.global_position) - 1.5) / 6.0, 0.0, 1.0)
+	hud.set_fuzz(fuzz)
 
 
 func _check_player_cell() -> void:

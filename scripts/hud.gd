@@ -46,6 +46,9 @@ var _crosshair: Label
 var _dread: ColorRect
 var _dread_mat: ShaderMaterial
 var _dread_amount := 0.0
+var _fuzz: ColorRect
+var _fuzz_mat: ShaderMaterial
+var _fuzz_amount := 0.0
 
 var _lines: Array = []       # queued intercom lines: [style, text]
 var _line_shown := 0.0
@@ -82,6 +85,12 @@ void fragment() {
 	_dread_mat.shader = dsh
 	_dread.material = _dread_mat
 	_root.add_child(_dread)
+	_fuzz = ColorRect.new()
+	_fuzz.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_fuzz.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fuzz_mat = Game.static_material(0.0)
+	_fuzz.material = _fuzz_mat
+	_root.add_child(_fuzz)
 	_locker_view = _make_locker_view()
 	_root.add_child(_locker_view)
 
@@ -334,6 +343,12 @@ func _refresh_journal() -> void:
 func set_dread(amount: float) -> void:
 	_dread_amount = lerpf(_dread_amount, amount, 0.1)
 	_dread_mat.set_shader_parameter("amount", _dread_amount)
+
+
+func set_fuzz(amount: float) -> void:
+	_fuzz_amount = lerpf(_fuzz_amount, amount, 0.15)
+	var flicker := 0.6 + 0.4 * randf()
+	_fuzz_mat.set_shader_parameter("amount", _fuzz_amount * 0.3 * flicker)
 
 
 func set_meters(player: Node) -> void:

@@ -25,6 +25,7 @@ var battery := 100.0
 var breath := 100.0
 var holding_breath := false
 var hidden_in: Node = null
+var carrying: Node = null   # a relay you're holding (Sector 3)
 var frozen := false
 var noise := 0.0           # how loud you are right now (metres the sound carries)
 var _gasp_lock := 0.0
@@ -94,10 +95,19 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("interact"):
 		if hidden_in:
 			leave_locker()
+		elif carrying:
+			sector.try_place()
 		else:
 			var hit := ray.get_collider()
 			if hit and hit.has_method("interact"):
 				hit.interact(self)
+	elif event.is_action_pressed("rotate"):
+		if carrying:
+			sector.turn_carried()
+		else:
+			var hit := ray.get_collider()
+			if hit and hit.has_method("turn"):
+				hit.turn()
 
 
 func _physics_process(delta: float) -> void:
@@ -182,6 +192,9 @@ func _physics_process(delta: float) -> void:
 	cam.position.y = _eye + sin(_bob) * bob_amt * minf(hspeed, 1.0)
 
 	# What am I looking at?
+	if carrying:
+		sector.hud.set_prompt(sector.carry_prompt())
+		return
 	var hit := ray.get_collider()
 	if hit and hit.has_method("prompt"):
 		sector.hud.set_prompt(hit.prompt())
@@ -229,6 +242,9 @@ func _update_breath(delta: float) -> void:
 # ------------------------------------------------------------------ lockers
 
 func enter_locker(locker: Node) -> void:
+	if carrying:
+		sector.hud.toast("Put the relay down first.", 2.0)
+		return
 	hidden_in = locker
 	locker.set_occupied(true)
 	shape.set_deferred("disabled", true)
