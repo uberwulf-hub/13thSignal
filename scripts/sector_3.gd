@@ -86,7 +86,6 @@ var gates: Dictionary = {}        # cell -> door
 var receiver_lamps: Dictionary = {}   # cell -> material
 var powered: Dictionary = {}      # receiver cell -> colour reaching it
 var _beam_root: Node3D
-var _marker: MeshInstance3D
 var _player_room := ""
 
 
@@ -137,6 +136,7 @@ func _custom_cell(k: String, cell: Vector2i) -> void:
 			rl.position = p
 			rl.setup(self, cell)
 			relays.append(rl)
+			carryables.append(rl)
 		"w":
 			var glass := StandardMaterial3D.new()
 			glass.albedo_color = Color(0.6, 0.85, 1.0, 0.12)
@@ -220,10 +220,8 @@ func _spawn_receiver(cell: Vector2i) -> void:
 # =================================================================== beams
 
 func _relay_at(cell: Vector2i) -> Node:
-	for rl in relays:
-		if rl.cell == cell and rl != player.carrying:
-			return rl
-	return null
+	var item := _carryable_at(cell)
+	return item if item in relays else null
 
 
 ## Does a beam stop at this cell (before entering it)?
@@ -380,103 +378,9 @@ func _lab_solved(lab: String) -> void:
 		hud.say("unknown", "thank you. now everyone will hear it.")
 
 
-# =========================================================== carry & place
-
-func pick_up(rl: Node) -> void:
-	if player.carrying:
-		return
-	player.carrying = rl
-	rl.set_carried(true)
-	rl.reparent(player.cam)
-	rl.position = Vector3(0.6, -1.15, -1.3)
-	rl.rotation = Vector3.ZERO
-	rl.scale = Vector3.ONE * 0.45
-	Sound.play("locker", -10.0, 1.4)
+## A relay moved, was picked up or turned: re-trace the beams.
+func _on_carry_changed() -> void:
 	update_beams()
-
-
-func _place_target() -> Vector2i:
-	# The cell in front of you, in whichever of the 4 directions you face most.
-	var d: Vector2i = Relay.DIRS[_player_dir_index()]
-	return world_to_cell(player.global_position) + d
-
-
-func _can_place(cell: Vector2i) -> bool:
-	var k := ch(cell)
-	if not k in [".", "g", "r", "i", "L", "f", "P", "M"]:
-		return false
-	if k == "L" or k == "i":
-		return false
-	if _relay_at(cell) != null:
-		return false
-	return true
-
-
-func _player_dir_index() -> int:
-	var fwd: Vector3 = -player.global_transform.basis.z
-	if absf(fwd.x) > absf(fwd.z):
-		return 0 if fwd.x > 0.0 else 2
-	return 1 if fwd.z > 0.0 else 3
-
-
-func carry_prompt() -> String:
-	var cell := _place_target()
-	_show_marker(cell, _can_place(cell))
-	if _can_place(cell):
-		return "Put the relay down      [R] turn it"
-	return "Can't put it there"
-
-
-func _show_marker(cell: Vector2i, ok: bool) -> void:
-	if _marker == null:
-		_marker = MeshInstance3D.new()
-		var pm := PlaneMesh.new()
-		pm.size = Vector2(S * 0.8, S * 0.8)
-		_marker.mesh = pm
-		add_child(_marker)
-	_marker.visible = player.carrying != null
-	_marker.global_position = cell_to_world(cell) + Vector3(0, 0.03, 0)
-	var m := StandardMaterial3D.new()
-	m.albedo_color = Color(0.4, 1.0, 0.6, 0.25) if ok else Color(1.0, 0.3, 0.3, 0.2)
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_marker.material_override = m
-
-
-func try_place() -> void:
-	var rl: Node = player.carrying
-	var cell := _place_target()
-	if not _can_place(cell):
-		Sound.play("locked", -10.0)
-		return
-	_put(rl, cell)
-	Sound.play_at("breaker", rl.global_position, -10.0, 1.6)
-	emit_noise(rl.global_position, 4.0, true)
-
-
-func _put(rl: Node, cell: Vector2i) -> void:
-	player.carrying = null
-	rl.reparent(self)
-	rl.scale = Vector3.ONE
-	rl.rotation = Vector3.ZERO
-	rl.cell = cell
-	rl.global_position = cell_to_world(cell)
-	rl.set_carried(false)
-	if _marker:
-		_marker.visible = false
-	update_beams()
-
-
-func turn_carried() -> void:
-	var rl: Node = player.carrying
-	rl.set_facing(rl.facing + 1)
-	Sound.play("click", -6.0)
-
-
-func drop_carried() -> void:
-	var rl: Node = player.carrying
-	var cell: Vector2i = rl.cell if _relay_at(rl.cell) == null else rl.home_cell
-	_put(rl, cell)
 
 
 func trail_shielded() -> bool:

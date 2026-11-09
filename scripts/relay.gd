@@ -6,6 +6,7 @@ extends StaticBody3D
 const DIRS := [Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(0, -1)]  # E, S, W, N
 
 var sector: Node
+var item_name := "relay"
 var cell := Vector2i.ZERO
 var home_cell := Vector2i.ZERO
 var facing := 0              # index into DIRS
@@ -126,7 +127,7 @@ func interact(_player: Node) -> void:
 func turn() -> void:
 	set_facing(facing + 1)
 	Sound.play_at("click", global_position, -4.0)
-	sector.update_beams()
+	sector._on_carry_changed()
 
 
 func set_carried(on: bool) -> void:

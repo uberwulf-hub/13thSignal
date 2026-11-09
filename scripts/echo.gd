@@ -216,6 +216,11 @@ func _physics_process(delta: float) -> void:
 
 	# Follow your footsteps, oldest first.
 	var target: Vector3 = player.global_position if _idx >= trail.size() else trail[_idx]
+	if sector.echo_blocked(target) or sector.echo_blocked(global_position + (target - global_position).normalized() * 1.2):
+		# A jammer's field is in the way. It can't step into it: it waits and stares.
+		var look: Vector3 = player.global_position - global_position
+		rotation.y = lerp_angle(rotation.y, atan2(look.x, look.z), minf(delta * 4.0, 1.0))
+		return
 	var to := target - global_position
 	to.y = 0.0
 	var step := float(Game.mode_data()["echo_speed"]) * delta

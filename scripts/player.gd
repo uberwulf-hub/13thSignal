@@ -172,6 +172,8 @@ func _physics_process(delta: float) -> void:
 			loud = 20.0 if on_grate else 12.0
 		else:
 			loud = 10.0 if on_grate else 4.5
+	if loud > 0.0 and sector.noise_muffled(global_position):
+		loud = 0.0   # inside a jammer's field: silent
 	noise = lerpf(noise, loud, minf(delta * 8.0, 1.0))
 	_noise_t -= delta
 	if loud > 0.0 and _noise_t <= 0.0:

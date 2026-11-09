@@ -240,6 +240,15 @@ func _generate() -> void:
 		whisper[i] = hiss * syll * formant * 0.5
 	_streams["echo_whisper"] = _wav(whisper, true)
 
+	# A jammer's hum: a low buzz with a wobble (repeats exactly every 2 s).
+	var hum2 := _buf(2.0)
+	for i in hum2.size():
+		var t := float(i) / RATE
+		var wob := 0.7 + 0.3 * sin(TAU * 3.0 * t)
+		hum2[i] = (sin(TAU * 120.0 * t) * 0.25 + sin(TAU * 181.0 * t) * 0.12 + randf_range(-0.04, 0.04)) * wob
+	_streams["jam_hum"] = _wav(hum2, true)
+	_streams["cam_beep"] = _wav(_tone([[1760.0, 0.06]], 0.2, "square", 30.0))
+
 	# The Replacement: creaking plastic.
 	var creak := _buf(0.5)
 	var phase := 0.0

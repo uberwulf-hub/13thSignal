@@ -999,22 +999,145 @@ func gate_interact(door: Node) -> void:
 	Sound.play_at("locked", door.global_position, -2.0)
 
 
-## SECTOR HOOK: carrying things (Sector 3's relays).
-func try_place() -> void:
+# ======================================================= carrying things
+# Relays (Sector 3) and jammers (Sector 4) are "carryables": pick one up with
+# E, put it down on the floor square in front of you with E. Each has a
+# `cell`, a `home_cell`, an `item_name`, set_carried(on), and may have
+# set_facing(i) if it can be turned with R.
+
+const DIRS := [Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(0, -1)]  # E, S, W, N
+
+var carryables: Array = []
+var _marker: MeshInstance3D
+
+
+## SECTOR HOOK: something was picked up, put down or turned.
+func _on_carry_changed() -> void:
 	pass
 
 
-func turn_carried() -> void:
-	pass
+## SECTOR HOOK: extra rules for where things can be put down.
+func _extra_place_ok(_cell: Vector2i) -> bool:
+	return true
+
+
+func _carryable_at(cell: Vector2i) -> Node:
+	for item in carryables:
+		if item.cell == cell and item != player.carrying:
+			return item
+	return null
+
+
+func pick_up(item: Node) -> void:
+	if player.carrying:
+		return
+	player.carrying = item
+	item.set_carried(true)
+	item.reparent(player.cam)
+	item.position = Vector3(0.6, -1.15, -1.3)
+	item.rotation = Vector3.ZERO
+	item.scale = Vector3.ONE * 0.45
+	Sound.play("locker", -10.0, 1.4)
+	_on_carry_changed()
+
+
+func _player_dir_index() -> int:
+	var fwd: Vector3 = -player.global_transform.basis.z
+	if absf(fwd.x) > absf(fwd.z):
+		return 0 if fwd.x > 0.0 else 2
+	return 1 if fwd.z > 0.0 else 3
+
+
+## The floor square in front of you, in whichever of the 4 directions you face most.
+func _place_target() -> Vector2i:
+	return world_to_cell(player.global_position) + DIRS[_player_dir_index()]
+
+
+func _can_place(cell: Vector2i) -> bool:
+	var k := ch(cell)
+	if not k in [".", "g", "r", "j", "f", "P", "M", "C"]:
+		return false
+	if _carryable_at(cell) != null:
+		return false
+	return _extra_place_ok(cell)
 
 
 func carry_prompt() -> String:
-	return ""
+	var cell := _place_target()
+	var ok := _can_place(cell)
+	_show_marker(cell, ok)
+	if not ok:
+		return "Can't put it there"
+	var item: Node = player.carrying
+	var text: String = "Put the %s down" % item.item_name
+	if item.has_method("set_facing"):
+		text += "      [R] turn it"
+	return text
 
 
-## SECTOR HOOK: you got caught while carrying something.
+func _show_marker(cell: Vector2i, ok: bool) -> void:
+	if _marker == null:
+		_marker = MeshInstance3D.new()
+		var pm := PlaneMesh.new()
+		pm.size = Vector2(S * 0.8, S * 0.8)
+		_marker.mesh = pm
+		add_child(_marker)
+	_marker.visible = player.carrying != null
+	_marker.global_position = cell_to_world(cell) + Vector3(0, 0.03, 0)
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.4, 1.0, 0.6, 0.25) if ok else Color(1.0, 0.3, 0.3, 0.2)
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_marker.material_override = m
+
+
+func try_place() -> void:
+	var item: Node = player.carrying
+	var cell := _place_target()
+	if not _can_place(cell):
+		Sound.play("locked", -10.0)
+		return
+	_put(item, cell)
+	Sound.play_at("breaker", item.global_position, -10.0, 1.6)
+	emit_noise(item.global_position, 4.0, true)
+
+
+func _put(item: Node, cell: Vector2i) -> void:
+	if player.carrying == item:
+		player.carrying = null
+	item.reparent(self)
+	item.scale = Vector3.ONE
+	item.rotation = Vector3.ZERO
+	item.cell = cell
+	item.global_position = cell_to_world(cell)
+	item.set_carried(false)
+	if _marker:
+		_marker.visible = false
+	_on_carry_changed()
+
+
+func turn_carried() -> void:
+	var item: Node = player.carrying
+	if item.has_method("set_facing"):
+		item.set_facing(item.facing + 1)
+		Sound.play("click", -6.0)
+
+
+## You got caught while carrying something: it drops where it last stood.
 func drop_carried() -> void:
-	pass
+	var item: Node = player.carrying
+	var cell: Vector2i = item.cell if _carryable_at(item.cell) == null else item.home_cell
+	_put(item, cell)
+
+
+## SECTOR HOOK: true where your footsteps make no sound (Sector 4's jammers).
+func noise_muffled(_pos: Vector3) -> bool:
+	return false
+
+
+## SECTOR HOOK: true where ECHO can't step (Sector 4's jammer fields).
+func echo_blocked(_pos: Vector3) -> bool:
+	return false
 
 
 ## SECTOR HOOK: true while you're somewhere ECHO can't follow (shielded rooms).

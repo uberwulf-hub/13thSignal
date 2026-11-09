@@ -275,6 +275,66 @@ func _ready() -> void:
 	s.queue_free()
 	await wait(0.3)
 
+	check(Game.sector_unlocked >= 4, "clearing Sector 3 unlocks Sector 4")
+
+	# --- Sector 4: jammers (Survivor) ---
+	Game.scary_unlocked = true
+	Game.mode = Game.Mode.SURVIVOR
+	s = load("res://scenes/sector_4.tscn").instantiate()
+	add_child(s)
+	await wait(1.0)
+	s.listener.set_physics_process(false)
+	s.listener.reset_to(s.cell_to_world(Vector2i(1, 9)))
+	check(s.jammers.size() == 2 and s.lasers.size() == 3 and s.cameras.size() == 2, "Sector 4 has 2 jammers, 3 laser grids and 2 cameras")
+	var cp := Vector2i(8, 5)
+	check(s.lasers[cp]["on"] and s.grid.is_point_solid(cp), "the checkpoint laser grid starts on")
+	var hall_j = s.jammers[1]
+	s.player.global_position = s.cell_to_world(Vector2i(6, 7))
+	s.pick_up(hall_j)
+	check(s.player.carrying == hall_j, "you can pick up a jammer")
+	s._put(hall_j, Vector2i(8, 6))
+	check(not s.lasers[cp]["on"] and not s.grid.is_point_solid(cp), "a jammer next to a laser grid switches it off")
+	check(s.noise_muffled(s.cell_to_world(Vector2i(8, 6))) and not s.noise_muffled(s.cell_to_world(Vector2i(20, 8))), "footsteps are silent only inside a jammer's field")
+	check(s.echo_blocked(s.cell_to_world(Vector2i(8, 7))), "ECHO can't step into a jammer's field")
+	s.player.global_position = s.cell_to_world(Vector2i(8, 2))
+	s.pick_up(hall_j)
+	s._update_jamming()
+	check(s.lasers[cp]["on"], "picking the jammer back up switches the grid on again")
+	var button = null
+	for c in s.get_children():
+		if c.get("prompt_text") == "Open the shutter":
+			button = c
+	button.interact(s.player)
+	check(s.shutter.is_open and not s.grid.is_point_solid(s.shutter.cell), "the armory button opens the shutter")
+	s._put(hall_j, Vector2i(8, 2))
+	# Cameras: point camera 1 straight at you and let it watch.
+	var cam: Dictionary = s.cameras[0]
+	s.player.global_position = s.cell_to_world(Vector2i(25, 11))
+	var to: Vector3 = s.player.global_position - cam["pivot"].global_position
+	cam["base"] = atan2(to.x, to.z)
+	cam["amp"] = 0.0
+	await wait(1.6)
+	check(cam["cooldown"] > 0.0, "a camera that keeps you in view sets off the alarm")
+	s.listener.reset_to(s.cell_to_world(Vector2i(1, 9)))
+	var cam_j = s.jammers[0]
+	s._put(cam_j, Vector2i(27, 12))
+	s._update_jamming()
+	cam["cooldown"] = 0.0
+	await wait(1.5)
+	check(not cam["on"] and cam["cooldown"] == 0.0, "a jammed camera goes dark and can't spot you")
+	# The elevator wing needs both jammers: one on the grid, one on the camera.
+	s._put(cam_j, Vector2i(27, 16))
+	s._put(hall_j, Vector2i(21, 15))
+	s._update_jamming()
+	check(not s.cameras[1]["on"] and not s.lasers[Vector2i(20, 15)]["on"] and not s.lasers[Vector2i(20, 16)]["on"], "two jammers cover the final grid and camera")
+	s.exit_interact(s.exit_door)
+	check(s.exit_open, "the elevator opens")
+	s.player.global_position = s.cell_to_world(Vector2i(15, 15))
+	await wait(1.0)
+	check(s.ended, "stepping into the elevator finishes Sector 4")
+	s.queue_free()
+	await wait(0.3)
+
 	Game.lock_scary_modes()
 	print("\n%s (%d failed)" % ["ALL PASSED" if failures == 0 else "SOME TESTS FAILED", failures])
 	get_tree().quit(1 if failures > 0 else 0)

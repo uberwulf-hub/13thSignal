@@ -92,6 +92,20 @@ colours jams.
   In Survivor and Nightmare it also stretches taller and reaches for you, lurches forward along your trail,
   and fills the screen with static up close.
 
+### Sector 4: Security Wing
+
+Portable **signal jammers**. Put one down (**E**) and it jams its own floor square and the 8 around it (the
+glowing purple square): **laser grids** switch off, **security cameras** go dark, **your footsteps are silent**,
+and **ECHO can't step in**. While you carry it, it does nothing, and you can walk right over it.
+
+- A laser grid blocks the checkpoint. The jammer in the hall gets you into the Armory, which has a second jammer
+  and a button that opens a shutter back to the hall.
+- A camera sweeps the camera hall; you can see its cone of light. Hide behind the pillars between sweeps, or jam
+  it. If a camera keeps you in view (longer in Explorer), an alarm brings the Listener. Cameras can't see straight
+  down: the square under a camera is a blind spot.
+- The elevator is behind a laser grid watched by a second camera. One jammer can't cover both, so you need both
+  jammers there at once.
+
 **Secrets:** 3 signal fragments are hidden in each sector. One is behind a low vent you have to crouch through.
 
 ## Run it from the source code
@@ -100,7 +114,7 @@ colours jams.
 2. Open Godot, click **Import**, choose this folder's `project.godot`, then press **F5** to play.
 
 Everything is built in code (`scripts/`). Each sector's map is a text drawing at the top of its script
-(`scripts/sector.gd`, `scripts/sector_2.gd`, `scripts/sector_3.gd`). Redesign a sector by editing the
+(`scripts/sector.gd`, `scripts/sector_2.gd`, `scripts/sector_3.gd`, `scripts/sector_4.gd`). Redesign a sector by editing the
 characters; the legend is right above each map.
 
 `scripts/sector.gd` is also the shared base for every sector: monsters, lockers, noise, checkpoints, scares
@@ -109,7 +123,7 @@ and the end screen. A new sector is a script that `extends` it and overrides the
 All sounds are synthesized in `scripts/sound.gd`, so there are no audio files to license.
 
 **Automated test:** this plays through the sector and checks the Parent Lock, the puzzles, getting caught,
-the checkpoints, the monster's learning, Sector 2's vaults and ECHO, and Sector 3's relay labs:
+the checkpoints, the monster's learning, Sector 2's vaults and ECHO, Sector 3's relay labs, and Sector 4's jammers and cameras:
 ```
 godot --headless --path . res://tests/smoke_test.tscn
 ```
@@ -126,7 +140,7 @@ The store reads `saucestore.json` from the release's tag, so listing edits go li
 
 ## Where it goes next
 
-- **Sectors 4 to 12**, each with its own puzzle style and a new trick for the monsters (next: portable jammers).
+- **Sectors 5 to 12**, each with its own puzzle style and a new trick for the monsters (next: echo recordings, where a recording of you holds doors open).
 - **SUBJECT 13**, the final boss. You only see the whole thing at the end, and you beat it with puzzle mechanics, not firepower.
 - **13 signal fragments** across the game that unlock the true ending.
 - Voice acting for MERIDIAN and ECHO, real recorded sound effects, more rooms and props.
