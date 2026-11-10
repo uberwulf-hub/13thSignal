@@ -423,6 +423,60 @@ func _ready() -> void:
 	s.queue_free()
 	await wait(0.3)
 
+	# --- Touch controls (phones and tablets) ---
+	Game.lock_scary_modes()
+	Game.touch_mode = 1
+	s = load("res://scenes/sector.tscn").instantiate()
+	add_child(s)
+	await wait(1.0)
+	s.listener.set_physics_process(false)
+	var tc = null
+	for c in s.get_children():
+		if c.get_script() == load("res://scripts/touch_controls.gd"):
+			tc = c
+	check(tc != null, "touch controls appear when on-screen controls are on")
+	# Feed touches straight to the controls, in screen coordinates.
+	var vp: Vector2 = tc.get_viewport().get_visible_rect().size
+	var down := InputEventScreenTouch.new()
+	down.index = 0
+	down.pressed = true
+	down.position = Vector2(vp.x * 0.15, vp.y * 0.7)
+	tc._input(down)
+	var drag := InputEventScreenDrag.new()
+	drag.index = 0
+	drag.position = down.position + Vector2(0, -100)
+	drag.relative = Vector2(0, -100)
+	tc._input(drag)
+	await wait(0.1)
+	check(Input.get_vector("move_left", "move_right", "move_forward", "move_back").y < -0.5, "the left thumb joystick moves you forward")
+	var up := InputEventScreenTouch.new()
+	up.index = 0
+	up.pressed = false
+	up.position = drag.position
+	tc._input(up)
+	await wait(0.1)
+	check(Input.get_vector("move_left", "move_right", "move_forward", "move_back").length() < 0.01, "letting go of the joystick stops you")
+	var yaw_before: float = s.player.yaw
+	var look_down := InputEventScreenTouch.new()
+	look_down.index = 1
+	look_down.pressed = true
+	look_down.position = Vector2(vp.x * 0.6, vp.y * 0.4)
+	tc._input(look_down)
+	var look_drag := InputEventScreenDrag.new()
+	look_drag.index = 1
+	look_drag.position = look_down.position + Vector2(80, 0)
+	look_drag.relative = Vector2(80, 0)
+	tc._input(look_drag)
+	await wait(0.1)
+	check(absf(s.player.yaw - yaw_before) > 0.05, "dragging on the right side turns your view")
+	tc._buttons["crouch"].pressed.emit()
+	check(Input.is_action_pressed("crouch"), "the CROUCH button toggles crouching on")
+	tc._buttons["crouch"].pressed.emit()
+	check(not Input.is_action_pressed("crouch"), "...and off again")
+	Game.touch_mode = 0
+	s.queue_free()
+	await wait(0.3)
+
 	Game.lock_scary_modes()
 	print("\n%s (%d failed)" % ["ALL PASSED" if failures == 0 else "SOME TESTS FAILED", failures])
 	get_tree().quit(1 if failures > 0 else 0)

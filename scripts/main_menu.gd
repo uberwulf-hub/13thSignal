@@ -161,6 +161,18 @@ func _build_options(col: VBoxContainer) -> void:
 		Game.volume = v
 		Game.apply_volume())
 	_slider(_options_box, "Brightness", 0.6, 1.8, Game.brightness, func(v): Game.brightness = v)
+	var touch_btn := _add_button(_options_box, "", func(): pass)
+	var gfx_btn := _add_button(_options_box, "", func(): pass)
+	var refresh := func():
+		touch_btn.text = "ON-SCREEN CONTROLS:  " + Game.TOUCH_NAMES[Game.touch_mode] + ("  (phones and touch screens)" if Game.touch_mode == 0 else "")
+		gfx_btn.text = "GRAPHICS:  " + Game.QUALITY_NAMES[Game.gfx()] + ("  (picked for this device)" if Game.quality < 0 else "")
+	touch_btn.pressed.connect(func():
+		Game.touch_mode = (Game.touch_mode + 1) % 3
+		refresh.call())
+	gfx_btn.pressed.connect(func():
+		Game.quality = (Game.gfx() + 1) % 3
+		refresh.call())
+	refresh.call()
 	var inv := CheckBox.new()
 	inv.text = "Invert look up/down"
 	inv.button_pressed = Game.invert_y

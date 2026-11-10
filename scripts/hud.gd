@@ -564,4 +564,4 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton and event.pressed and _pause == null and not keypad_open():
 		# Clicking back into the game window grabs the mouse again.
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		Game.capture_mouse()

@@ -58,7 +58,7 @@ func _ready() -> void:
 	flashlight.spot_attenuation = 0.8
 	flashlight.light_energy = 3.0
 	flashlight.light_color = Color(1.0, 0.95, 0.85)
-	flashlight.shadow_enabled = true
+	flashlight.shadow_enabled = Game.gfx() >= 1
 	flashlight.position = Vector3(0.18, -0.15, 0.0)
 	cam.add_child(flashlight)
 	ray = RayCast3D.new()
@@ -80,9 +80,9 @@ func _apply_look() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if frozen or Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+	if frozen or (Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and not Game.use_touch()):
 		return
-	if event is InputEventMouseMotion:
+	if event is InputEventMouseMotion and not Game.use_touch():
 		var inv := -1.0 if Game.invert_y else 1.0
 		yaw -= event.relative.x * Game.mouse_sensitivity * 0.01
 		pitch -= event.relative.y * Game.mouse_sensitivity * 0.01 * inv
@@ -204,6 +204,17 @@ func _physics_process(delta: float) -> void:
 		sector.hud.set_prompt(hit.prompt())
 	else:
 		sector.hud.set_prompt("")
+
+
+## Looking around by dragging a finger (touch screens).
+func touch_look(rel: Vector2) -> void:
+	if frozen:
+		return
+	var inv := -1.0 if Game.invert_y else 1.0
+	yaw -= rel.x * Game.mouse_sensitivity * 0.012
+	pitch -= rel.y * Game.mouse_sensitivity * 0.012 * inv
+	pitch = clampf(pitch, -1.45, 1.45)
+	_apply_look()
 
 
 func _gamepad_look(delta: float) -> void:

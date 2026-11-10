@@ -25,10 +25,12 @@ const Door := preload("res://scripts/door.gd")
 const Locker := preload("res://scripts/locker.gd")
 const Interactable := preload("res://scripts/interactable.gd")
 const Echo := preload("res://scripts/echo.gd")
+const TouchControls := preload("res://scripts/touch_controls.gd")
 
 const S := 3.0         # one map cell is 3 x 3 metres
 const WALL_H := 3.2
 const VENT_H := 1.15
+const CHUNK := 5       # floors, ceilings and walls are built in 5 x 5 cell pieces
 
 ## Map legend:
 ##  #  wall           .  floor          P  you start here
@@ -172,8 +174,10 @@ func _ready() -> void:
 	hud.sector = self
 	add_child(hud)
 	_spawn_actors()
+	if Game.use_touch():
+		add_child(TouchControls.new().setup(self))
 	hud.set_fragments(0, fragment_total)
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	Game.capture_mouse()
 	Sound.start_ambient(-11.0)
 	var gap: Vector2 = Game.mode_data()["scare_gap"]
 	_event_t = randf_range(gap.x, gap.y)
@@ -279,7 +283,7 @@ func _build_environment() -> void:
 	_env.fog_enabled = true
 	_env.fog_light_color = Color(0.01, 0.015, 0.025)
 	_env.fog_density = 0.035
-	_env.glow_enabled = true
+	_env.glow_enabled = Game.gfx() >= 1
 	_env.glow_intensity = 0.6
 	_env.adjustment_enabled = true
 	_env.adjustment_brightness = Game.brightness
@@ -353,10 +357,16 @@ func _build_level() -> void:
 	var ceil_mat := _mat(Color(0.12, 0.13, 0.15), 0.95)
 	var grate_mat := _mat(Color(0.42, 0.3, 0.2), 0.5, 0.7, 0.9)
 
-	# Floor and ceiling.
+	# Floor and ceiling, in chunks. (Phones light each object with at most a
+	# few lights, so one huge floor would leave most rooms dark there.)
 	var center := Vector3((cols - 1) * S / 2.0, 0, (rows - 1) * S / 2.0)
-	_box(Vector3(cols * S, 0.2, rows * S), center + Vector3(0, -0.1, 0), floor_mat)
-	_box(Vector3(cols * S, 0.2, rows * S), center + Vector3(0, WALL_H + 0.1, 0), ceil_mat)
+	for cy in range(0, rows, CHUNK):
+		for cx in range(0, cols, CHUNK):
+			var w := mini(CHUNK, cols - cx)
+			var h := mini(CHUNK, rows - cy)
+			var mid := Vector3((cx + (w - 1) / 2.0) * S, 0, (cy + (h - 1) / 2.0) * S)
+			_box(Vector3(w * S, 0.2, h * S), mid + Vector3(0, -0.1, 0), floor_mat)
+			_box(Vector3(w * S, 0.2, h * S), mid + Vector3(0, WALL_H + 0.1, 0), ceil_mat)
 	var solid := StaticBody3D.new()
 	solid.collision_layer = 1
 	solid.collision_mask = 0
@@ -370,25 +380,33 @@ func _build_level() -> void:
 		for c in cols:
 			if ch(Vector2i(c, r)) == "#":
 				wall_cells.append(Vector2i(c, r))
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
 	var wall_mesh := BoxMesh.new()
 	wall_mesh.size = Vector3(S, WALL_H, S)
 	wall_mesh.material = wall_mat
-	mm.mesh = wall_mesh
-	mm.instance_count = wall_cells.size()
 	var wall_shape := BoxShape3D.new()
 	wall_shape.size = Vector3(S, WALL_H, S)
-	for i in wall_cells.size():
-		var p := cell_to_world(wall_cells[i]) + Vector3(0, WALL_H / 2.0, 0)
-		mm.set_instance_transform(i, Transform3D(Basis(), p))
+	var chunks: Dictionary = {}   # chunk -> Array of wall positions
+	for wc in wall_cells:
+		var p := cell_to_world(wc) + Vector3(0, WALL_H / 2.0, 0)
+		var key := Vector2i(wc.x / CHUNK, wc.y / CHUNK)
+		if not chunks.has(key):
+			chunks[key] = []
+		chunks[key].append(p)
 		var cs := CollisionShape3D.new()
 		cs.shape = wall_shape
 		cs.position = p
 		solid.add_child(cs)
-	var mmi := MultiMeshInstance3D.new()
-	mmi.multimesh = mm
-	add_child(mmi)
+	for key in chunks:
+		var list: Array = chunks[key]
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = wall_mesh
+		mm.instance_count = list.size()
+		for i in list.size():
+			mm.set_instance_transform(i, Transform3D(Basis(), list[i]))
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		add_child(mmi)
 
 	# A painted stripe along the walls of each room helps you find your way.
 	var stripe_mat := _glow(Color(0.15, 0.35, 0.5), 0.6)
@@ -1159,7 +1177,7 @@ func close_keypad() -> void:
 	hud.close_keypad()
 	if not ended and not catching:
 		player.frozen = false
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		Game.capture_mouse()
 
 
 func _on_code(code: String) -> void:
@@ -1263,7 +1281,7 @@ func on_caught(by: String) -> void:
 	catches += 1
 	if hud.keypad_open():
 		hud.close_keypad()
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		Game.capture_mouse()
 	if player.hidden_in:
 		player.leave_locker()
 	if player.carrying:
@@ -1309,7 +1327,10 @@ func _respawn() -> void:
 
 func set_paused(on: bool) -> void:
 	get_tree().paused = on
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if on else Input.MOUSE_MODE_CAPTURED
+	if on:
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	else:
+		Game.capture_mouse()
 
 
 func _process(delta: float) -> void:

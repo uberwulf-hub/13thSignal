@@ -62,6 +62,8 @@ var mouse_sensitivity := 0.25
 var volume := 0.8
 var brightness := 1.0
 var invert_y := false
+var touch_mode := 0                  # on-screen controls: 0 auto (phones/tablets), 1 on, 2 off
+var quality := -1                    # graphics: 0 low, 1 medium, 2 high (-1 = pick for this device)
 var best_times: Dictionary = {}      # mode name -> seconds
 var fragments_ever: Dictionary = {}  # fragment id -> true
 var sector_unlocked := 1             # the highest sector you can start from
@@ -88,6 +90,36 @@ func _ready() -> void:
 	_setup_input()
 	load_settings()
 	theme = _make_theme()
+
+
+const TOUCH_NAMES := ["AUTO", "ON", "OFF"]
+const QUALITY_NAMES := ["LOW", "MEDIUM", "HIGH"]
+
+
+## Running on a phone or tablet?
+func is_mobile() -> bool:
+	return OS.has_feature("mobile") or OS.has_feature("android") or OS.has_feature("ios")
+
+
+## Show the on-screen controls? (Auto = on phones, tablets and touch screens.)
+func use_touch() -> bool:
+	if touch_mode == 1:
+		return true
+	if touch_mode == 2:
+		return false
+	return is_mobile() or DisplayServer.is_touchscreen_available()
+
+
+## Hide and lock the mouse for looking around (not on touch screens, where you look by dragging).
+func capture_mouse() -> void:
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if use_touch() else Input.MOUSE_MODE_CAPTURED
+
+
+## Graphics quality: phones start on LOW, computers on HIGH, until you change it.
+func gfx() -> int:
+	if quality >= 0:
+		return quality
+	return 0 if is_mobile() else 2
 
 
 func mode_data() -> Dictionary:
@@ -152,6 +184,8 @@ func load_settings() -> void:
 	volume = cfg.get_value("settings", "volume", volume)
 	brightness = cfg.get_value("settings", "brightness", brightness)
 	invert_y = cfg.get_value("settings", "invert_y", invert_y)
+	touch_mode = clampi(int(cfg.get_value("settings", "touch", 0)), 0, 2)
+	quality = clampi(int(cfg.get_value("settings", "quality", -1)), -1, 2)
 	best_times = cfg.get_value("progress", "best_times", {})
 	fragments_ever = cfg.get_value("progress", "fragments", {})
 	sector_unlocked = cfg.get_value("progress", "sector_unlocked", 1)
@@ -165,6 +199,8 @@ func save_settings() -> void:
 	cfg.set_value("settings", "volume", volume)
 	cfg.set_value("settings", "brightness", brightness)
 	cfg.set_value("settings", "invert_y", invert_y)
+	cfg.set_value("settings", "touch", touch_mode)
+	cfg.set_value("settings", "quality", quality)
 	cfg.set_value("progress", "best_times", best_times)
 	cfg.set_value("progress", "fragments", fragments_ever)
 	cfg.set_value("progress", "sector_unlocked", sector_unlocked)

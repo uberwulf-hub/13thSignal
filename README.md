@@ -121,6 +121,36 @@ holds down **pressure plates**, and each plate holds a door open. Only one copy 
 
 **Secrets:** 3 signal fragments are hidden in each sector. One is behind a low vent you have to crouch through.
 
+## Phones and tablets (Android)
+
+The game also builds as an Android app (`The13thSignal-android.apk`), and SauceStore offers it to phones.
+
+- **Touch controls** appear on phones and touch screens: a joystick appears wherever your left thumb touches,
+  dragging on the right side looks around, and there are buttons for USE, LIGHT, RUN and CROUCH (tap to
+  switch on and off), HOLD BREATH (only in a locker), R (Sectors 3 and up), JOURNAL and pause.
+  A Bluetooth game controller works too. **Options → On-screen controls** switches them Auto / On / Off.
+- **Options → Graphics** is Low / Medium / High. Phones start on Low (no flashlight shadows or glow).
+
+### Android signing key (set this up once)
+
+Android only installs an update over an older copy if both were signed with the **same key**. Until you set
+your own key, the build makes one and keeps it in the GitHub Actions cache. That works, but if the cache is ever
+cleared, phones would have to uninstall the game (and lose their save) before installing the next version. To
+use your own permanent key, add these repository secrets (**Settings → Secrets and variables → Actions**):
+
+| Secret | What it is |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | the `.keystore` file, base64-encoded |
+| `ANDROID_KEYSTORE_ALIAS` | the key's alias |
+| `ANDROID_KEYSTORE_PASSWORD` | its password |
+
+Make a key with `keytool -genkeypair -v -keystore the13thsignal.keystore -alias the13thsignal -keyalg RSA -keysize 2048 -validity 10000`,
+then `base64 -w0 the13thsignal.keystore` gives the text for the first secret. Keep the file somewhere safe and
+use a different key from Race Track Mayhem's.
+
+To build just the Android app without releasing, run **Actions → Android → Run workflow**; the `.apk` is kept
+as a download on the run's page.
+
 ## Run it from the source code
 
 1. Install **Godot 4.3** (standard version) from <https://godotengine.org/download>.
@@ -144,7 +174,7 @@ godot --headless --path . res://tests/smoke_test.tscn
 ## Publishing to SauceStore
 
 `saucestore.json` is the store listing, and
-`.github/workflows/release.yml` builds `The13thSignal-windows.zip` and publishes a GitHub release
+`.github/workflows/release.yml` builds `The13thSignal-windows.zip` and `The13thSignal-android.apk` and publishes a GitHub release
 when you push a version tag (`git tag v0.1.0 && git push origin v0.1.0`).
 Before tagging, write what changed in `release-notes/<version>.md`, one change per line. SauceStore shows these
 lines as the game's Version history (a line starting with "Added" is tagged New, "Fixed" is tagged Fixed).
