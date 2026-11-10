@@ -1130,6 +1130,11 @@ func drop_carried() -> void:
 	_put(item, cell)
 
 
+## SECTOR HOOK: R was pressed. Return true if the sector used it (Sector 5 stops a recording).
+func on_rotate_pressed() -> bool:
+	return false
+
+
 ## SECTOR HOOK: true where your footsteps make no sound (Sector 4's jammers).
 func noise_muffled(_pos: Vector3) -> bool:
 	return false

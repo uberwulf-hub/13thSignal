@@ -102,7 +102,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			if hit and hit.has_method("interact"):
 				hit.interact(self)
 	elif event.is_action_pressed("rotate"):
-		if carrying:
+		if sector.on_rotate_pressed():
+			pass
+		elif carrying:
 			sector.turn_carried()
 		else:
 			var hit := ray.get_collider()

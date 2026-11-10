@@ -40,7 +40,7 @@ MERIDIAN at all.
 | Use / open / hide | E | A |
 | Flashlight | F | Y |
 | Hold your breath (in a locker) | Space (hold) | X (hold) |
-| Turn a relay (Sector 3) | R | Right bumper |
+| Turn a relay (Sector 3) / stop recording (Sector 5) | R | Right bumper |
 | Journal (clues) | Tab or J (hold) | Back/View |
 | Pause | Esc | Start |
 
@@ -106,6 +106,19 @@ and **ECHO can't step in**. While you carry it, it does nothing, and you can wal
 - The elevator is behind a laser grid watched by a second camera. One jammer can't cover both, so you need both
   jammers there at once.
 
+### Sector 5: Playback Lab
+
+**Recorders.** Press **E** at a recorder booth to start recording, move around, and press **R** to stop.
+A green hologram copy of you replays exactly what you did, then stays standing where you finished. Its weight
+holds down **pressure plates**, and each plate holds a door open. Only one copy exists at a time.
+
+- **Lab 1:** the plate is too far from its door, so your copy holds it while you walk through.
+- **Lab 2:** two doors in a row. Your copy must stand on the ORANGE plate long enough for you to get through,
+  then move to the YELLOW plate.
+- **Control room:** your copy must cross loud grates to hold the GREEN plate, which holds the elevator open.
+  Your copy makes *your* noise: walk normally while recording and the Listener hears it, finds your copy and
+  erases it. Crouch while you record. (In Explorer the Listener leaves copies alone.)
+
 **Secrets:** 3 signal fragments are hidden in each sector. One is behind a low vent you have to crouch through.
 
 ## Run it from the source code
@@ -114,7 +127,7 @@ and **ECHO can't step in**. While you carry it, it does nothing, and you can wal
 2. Open Godot, click **Import**, choose this folder's `project.godot`, then press **F5** to play.
 
 Everything is built in code (`scripts/`). Each sector's map is a text drawing at the top of its script
-(`scripts/sector.gd`, `scripts/sector_2.gd`, `scripts/sector_3.gd`, `scripts/sector_4.gd`). Redesign a sector by editing the
+(`scripts/sector.gd`, `scripts/sector_2.gd`, `scripts/sector_3.gd`, `scripts/sector_4.gd`, `scripts/sector_5.gd`). Redesign a sector by editing the
 characters; the legend is right above each map.
 
 `scripts/sector.gd` is also the shared base for every sector: monsters, lockers, noise, checkpoints, scares
@@ -123,7 +136,7 @@ and the end screen. A new sector is a script that `extends` it and overrides the
 All sounds are synthesized in `scripts/sound.gd`, so there are no audio files to license.
 
 **Automated test:** this plays through the sector and checks the Parent Lock, the puzzles, getting caught,
-the checkpoints, the monster's learning, Sector 2's vaults and ECHO, Sector 3's relay labs, and Sector 4's jammers and cameras:
+the checkpoints, the monster's learning, Sector 2's vaults and ECHO, Sector 3's relay labs, Sector 4's jammers and cameras, and Sector 5's recordings and plates:
 ```
 godot --headless --path . res://tests/smoke_test.tscn
 ```
@@ -140,7 +153,7 @@ The store reads `saucestore.json` from the release's tag, so listing edits go li
 
 ## Where it goes next
 
-- **Sectors 5 to 12**, each with its own puzzle style and a new trick for the monsters (next: echo recordings, where a recording of you holds doors open).
+- **Sectors 6 to 12**, each with its own puzzle style and a new trick for the monsters.
 - **SUBJECT 13**, the final boss. You only see the whole thing at the end, and you beat it with puzzle mechanics, not firepower.
 - **13 signal fragments** across the game that unlock the true ending.
 - Voice acting for MERIDIAN and ECHO, real recorded sound effects, more rooms and props.

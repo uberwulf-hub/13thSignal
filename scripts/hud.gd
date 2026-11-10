@@ -21,6 +21,7 @@ var _sub_name: Label
 var _sub_text: Label
 var _toast: Label
 var _toast_t := 0.0
+var _status: Label
 var _mode_label: Label
 var _frag_label: Label
 var _noise_bar: ProgressBar
@@ -167,6 +168,12 @@ void fragment() {
 	_sub_text.custom_minimum_size.x = 620
 	sv.add_child(_sub_text)
 
+	_status = _label("", 24, Color(1.0, 0.3, 0.3))
+	_status.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_status.custom_minimum_size.x = 600
+	_status.position += Vector2(-300, 52)
+	_root.add_child(_status)
 	_toast = _label("", 20, Color(1, 0.85, 0.5))
 	_toast.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -299,6 +306,12 @@ func set_objective(text: String) -> void:
 
 func set_fragments(found: int, total: int) -> void:
 	_frag_label.text = "SIGNAL FRAGMENTS  %d / %d" % [found, total]
+
+
+## A line that stays on screen until changed (Sector 5's recording indicator).
+func set_status(text: String, color := Color(1.0, 0.3, 0.3)) -> void:
+	_status.text = text
+	_status.add_theme_color_override("font_color", color)
 
 
 func toast(text: String, seconds := 3.5) -> void:
