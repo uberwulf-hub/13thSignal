@@ -169,7 +169,13 @@ func _physics_process(delta: float) -> void:
 	var loud := 0.0
 	if hspeed > 0.6:
 		if crouching:
-			loud = 2.6 if on_grate else 1.0
+			# Crouching is quieter, not silent. Once the Listener has learned
+			# to hear you crawl, it's twice as loud.
+			loud = 4.5 if on_grate else 2.2
+			if Game.learned_crouch:
+				loud *= 2.0
+			Game.crouch_time += delta
+			sector.note_crouch()
 		elif sprinting:
 			loud = 20.0 if on_grate else 12.0
 		else:

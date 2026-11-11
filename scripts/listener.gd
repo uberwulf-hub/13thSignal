@@ -35,6 +35,10 @@ var _stride := 0.0
 var _twitch_t := 0.0
 var _head_target := Vector3.ZERO
 var _last_pos := Vector3.ZERO
+var _hunch_t := 30.0
+var _pause_t := 0.0
+var _lunge_t := 4.0
+var _lunge_on := 0.0
 var _time := 0.0
 
 
@@ -62,6 +66,8 @@ func setup(s: Node) -> void:
 	_rasp.volume_db = -14.0 if Game.is_explorer() else -4.0
 	add_child(_rasp)
 	_rasp.play()
+	var gap: Vector2 = Game.mode_data()["hunch_gap"]
+	_hunch_t = randf_range(gap.x, gap.y)
 
 
 func _build_body() -> void:
@@ -261,6 +267,8 @@ func _physics_process(delta: float) -> void:
 	var mult := float(m["listener_speed"])
 	var player: Node = sector.player
 
+	_unpredictable(delta, m, player)
+
 	match state:
 		State.WANDER:
 			if path.is_empty():
@@ -268,9 +276,11 @@ func _physics_process(delta: float) -> void:
 				if _wait <= 0.0:
 					path = sector.find_path(global_position, sector.random_floor_pos())
 					_wait = randf_range(1.0, 3.0)
-			_follow(WANDER_SPEED * mult, delta)
+			if _pause_t <= 0.0:
+				_follow(WANDER_SPEED * mult, delta)
 		State.INVESTIGATE:
-			_follow(INVESTIGATE_SPEED * mult, delta)
+			if _pause_t <= 0.0:
+				_follow(INVESTIGATE_SPEED * mult, delta)
 			if path.is_empty():
 				state = State.LISTEN
 				_wait = randf_range(2.0, 3.5)
@@ -293,8 +303,12 @@ func _physics_process(delta: float) -> void:
 				if _repath_t <= 0.0:
 					_repath_t = 0.4
 					last_heard = player.global_position
-					_go_to(player.global_position)
-				_follow(HUNT_SPEED * mult, delta)
+					# It heads for where you're GOING, not where you are.
+					var lead: Vector3 = player.velocity * float(m["predict"])
+					lead.y = 0.0
+					_go_to(player.global_position + lead)
+				var burst := 1.6 if _lunge_on > 0.0 else 1.0
+				_follow(HUNT_SPEED * mult * burst, delta)
 		State.CHECK_LOCKER:
 			if not path.is_empty():
 				_follow(INVESTIGATE_SPEED * mult, delta)
@@ -326,6 +340,52 @@ func _physics_process(delta: float) -> void:
 		var flat := Vector2(global_position.x - player.global_position.x, global_position.z - player.global_position.z)
 		if flat.length() < 1.15:
 			sector.on_caught("listener")
+
+
+## The things that make it hard to predict: random pauses, hunches about
+## where you are, sensing you up close when it stops to listen, and lunges.
+func _unpredictable(delta: float, m: Dictionary, player: Node) -> void:
+	# Random pauses to listen, so its patrol can't be timed.
+	if _pause_t > 0.0:
+		_pause_t -= delta
+	elif (state == State.WANDER or state == State.INVESTIGATE) and randf() < 0.07 * delta:
+		_pause_t = randf_range(0.8, 2.2)
+		_breath.play()
+	# A hunch: it comes to check roughly where you are, even if you were quiet.
+	_hunch_t -= delta
+	if _hunch_t <= 0.0:
+		var gap: Vector2 = m["hunch_gap"]
+		_hunch_t = randf_range(gap.x, gap.y)
+		if state == State.WANDER and not player.hidden_in:
+			var r := float(m["hunch_radius"])
+			var guess: Vector3 = player.global_position + Vector3(randf_range(-r, r), 0, randf_range(-r, r))
+			state = State.INVESTIGATE
+			_go_to(guess)
+	# Up close, when it stops to listen, it can sense you even if you're silent.
+	var sense := float(m["sense"])
+	var still := state == State.LISTEN or state == State.CHECK_LOCKER or _pause_t > 0.0
+	if sense > 0.0 and still and not player.hidden_in and not player.frozen:
+		if global_position.distance_to(player.global_position) < sense and _can_reach_by_sound(player):
+			if state != State.HUNT:
+				sector.on_hunt_started()
+			state = State.HUNT
+			_hunt_t = 2.8
+			_pause_t = 0.0
+			last_heard = player.global_position
+	# Lunges: sudden bursts of speed while it hunts.
+	_lunge_on = maxf(_lunge_on - delta, 0.0)
+	if state == State.HUNT and m["lunge"]:
+		_lunge_t -= delta
+		if _lunge_t <= 0.0:
+			_lunge_t = randf_range(3.0, 6.0)
+			_lunge_on = 0.7
+
+
+## Nothing solid between it and you (it can't sense you through a wall).
+func _can_reach_by_sound(player: Node) -> bool:
+	var q := PhysicsRayQueryParameters3D.create(global_position + Vector3(0, 1.5, 0), player.global_position + Vector3(0, 1.0, 0), 1)
+	q.exclude = [player.get_rid()]
+	return get_world_3d().direct_space_state.intersect_ray(q).is_empty()
 
 
 func _after_listen() -> void:

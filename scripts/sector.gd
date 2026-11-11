@@ -844,6 +844,16 @@ func on_player_hid(_locker: Node) -> void:
 		hud.toast("THE LISTENER IS LEARNING: it now checks lockers.", 5.0)
 
 
+## You've been crawling around a lot: it learns to hear that too.
+func note_crouch() -> void:
+	var need := float(Game.mode_data()["learn_crouch"])
+	if Game.learned_crouch or need <= 0.0 or Game.crouch_time < need:
+		return
+	Game.learned_crouch = true
+	hud.say("ai", "It has learned to hear you crawl. Crouching will not hide you for long now.")
+	hud.toast("THE LISTENER IS LEARNING: it can hear you crouch-walk now.", 5.0)
+
+
 func note_sprint(pos: Vector3, delta: float) -> void:
 	var c := world_to_cell(pos)
 	Game.sprint_cells[c] = float(Game.sprint_cells.get(c, 0.0)) + delta

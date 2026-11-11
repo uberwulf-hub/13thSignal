@@ -423,6 +423,54 @@ func _ready() -> void:
 	s.queue_free()
 	await wait(0.3)
 
+	# --- A harder, less predictable Listener (Survivor) ---
+	Game.scary_unlocked = true
+	Game.mode = Game.Mode.SURVIVOR
+	s = load("res://scenes/sector.tscn").instantiate()
+	add_child(s)
+	await wait(1.0)
+	var lis = s.listener
+	lis.set_physics_process(true)
+	lis.reset_to(s.cell_to_world(Vector2i(14, 7)))
+	lis._wait = 99.0
+	lis._hunch_t = 999.0
+	s.player.global_position = s.cell_to_world(Vector2i(10, 6))
+	s.doors[Vector2i(10, 5)].interact(s.player)
+	check(lis.state != lis.State.WANDER, "opening a door is loud enough to bring the Listener")
+	lis.reset_to(s.cell_to_world(Vector2i(24, 8)))
+	lis._hunch_t = 0.0
+	await wait(0.1)
+	check(lis.state == lis.State.INVESTIGATE, "it sometimes gets a hunch and comes to check where you are")
+	s.player.global_position = s.cell_to_world(Vector2i(16, 7))
+	lis.reset_to(s.cell_to_world(Vector2i(16, 7)) + Vector3(2.5, 0, 0))
+	lis.state = lis.State.LISTEN
+	lis._wait = 5.0
+	lis._hunch_t = 999.0
+	await wait(0.15)
+	check(lis.state == lis.State.HUNT or s.catching, "standing silent right next to it while it listens isn't safe")
+	await wait(4.0)
+	Game.crouch_time = 60.0
+	s.note_crouch()
+	check(Game.learned_crouch, "in Survivor, crouching a lot teaches it to hear you crawl")
+	s.queue_free()
+	await wait(0.3)
+	Game.lock_scary_modes()
+	s = load("res://scenes/sector.tscn").instantiate()
+	add_child(s)
+	await wait(0.8)
+	Game.crouch_time = 999.0
+	s.note_crouch()
+	check(not Game.learned_crouch, "in Explorer it never learns to hear you crawl")
+	s.listener.set_physics_process(true)
+	s.player.global_position = s.cell_to_world(Vector2i(16, 7))
+	s.listener.reset_to(s.cell_to_world(Vector2i(16, 7)) + Vector3(2.5, 0, 0))
+	s.listener.state = s.listener.State.LISTEN
+	s.listener._wait = 5.0
+	await wait(0.15)
+	check(s.listener.state == s.listener.State.LISTEN, "in Explorer it can't sense a silent player")
+	s.queue_free()
+	await wait(0.3)
+
 	# --- Touch controls (phones and tablets) ---
 	Game.lock_scary_modes()
 	Game.touch_mode = 1

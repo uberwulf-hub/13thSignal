@@ -32,6 +32,8 @@ const MODES := [
 		"battery_drain": 0.6, "breath_drain": 10.0, "ambient": 0.12, "wrong_code_alarm": false,
 		"echo_hint": true,
 		"echo_delay": 40.0, "echo_speed": 1.7, "echo_catches": false,
+		"learn_crouch": 0.0, "hunch_gap": Vector2(110, 160), "hunch_radius": 12.0,
+		"sense": 0.0, "lunge": false, "predict": 0.0, "door_noise": 13.0,
 	},
 	{
 		"name": "SURVIVOR",
@@ -43,6 +45,8 @@ const MODES := [
 		"battery_drain": 1.2, "breath_drain": 16.0, "ambient": 0.08, "wrong_code_alarm": false,
 		"echo_hint": false,
 		"echo_delay": 22.0, "echo_speed": 2.3, "echo_catches": true,
+		"learn_crouch": 50.0, "hunch_gap": Vector2(40, 70), "hunch_radius": 9.0,
+		"sense": 3.5, "lunge": true, "predict": 0.8, "door_noise": 16.0,
 	},
 	{
 		"name": "NIGHTMARE",
@@ -54,6 +58,8 @@ const MODES := [
 		"battery_drain": 2.0, "breath_drain": 22.0, "ambient": 0.05, "wrong_code_alarm": true,
 		"echo_hint": false,
 		"echo_delay": 12.0, "echo_speed": 2.8, "echo_catches": true,
+		"learn_crouch": 25.0, "hunch_gap": Vector2(20, 40), "hunch_radius": 6.0,
+		"sense": 5.0, "lunge": true, "predict": 1.2, "door_noise": 20.0,
 	},
 ]
 
@@ -81,6 +87,8 @@ var sprint_time := 0.0
 var sprint_cells: Dictionary = {}    # Vector2i -> seconds sprinted in that cell
 var learned_lockers := false
 var learned_traps := false
+var crouch_time := 0.0
+var learned_crouch := false
 
 var theme: Theme
 
@@ -140,6 +148,8 @@ func reset_run() -> void:
 	sprint_cells = {}
 	learned_lockers = false
 	learned_traps = false
+	crouch_time = 0.0
+	learned_crouch = false
 
 
 # ---------------------------------------------------------------- Parent Lock

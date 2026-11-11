@@ -47,10 +47,16 @@ MERIDIAN at all.
 **The monsters**
 
 - **THE LISTENER** is blind and hears everything. Listen for its clicking: the faster it clicks, the closer it is to finding you.
-  The **NOISE** bar shows how far your sound carries. Walking is quiet, running is loud, the orange metal
-  grates are LOUD, and crouching is almost silent. Doors make noise when you open them.
+  The **NOISE** bar shows how far your sound carries. Running is loud, the orange metal grates are LOUD, and
+  crouching is quieter, but not silent. **Doors are heavy blast doors:** opening one is a bang it can hear from
+  far away, and the clank as it shuts gives away where you just were.
   **It learns.** If you hide in lockers a lot, it starts checking them, so hold your breath when it stops at yours.
-  If you run a lot, it strings tripwires across the halls you run through. Crouch to step over them.
+  If you run a lot, it strings tripwires across the halls you run through. Crouch to step over them. If you crouch
+  everywhere, it learns to hear you crawl, and your crouching gets twice as loud.
+  **It's hard to predict.** It stops at random to listen, gets hunches about where you are and comes to check,
+  and when it hunts you it heads for where you're going and lunges. When it stops to listen, it can sense you
+  close by even if you're silent, so don't stand still right next to it. (Explorer keeps all of this gentle: no
+  crawl-learning, no close-range sensing, no lunges, and rare hunches.)
 - **THE REPLACEMENT** is a scientist mannequin that only moves when you can't see it. It wakes up when the power comes back on.
   Keep your light on it.
 - **ECHO** copies MERIDIAN's voice and gives you bad advice. Check what it says against the notes you find.

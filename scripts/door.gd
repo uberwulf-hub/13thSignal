@@ -17,6 +17,7 @@ var shape: CollisionShape3D
 var display: Label3D    # the exit door's code-order screen
 var vault_letter := ""  # "A", "B" or "C" for vault doors
 var _close_t := 0.0
+var _opened_by_player := false
 var _tween: Tween
 
 
@@ -147,7 +148,10 @@ func open(noisy: bool) -> void:
 	is_open = true
 	Sound.play_at("door", global_position, -4.0)
 	if noisy:
-		sector.emit_noise(global_position, 7.0, true)
+		# Heavy blast doors: opening one is a loud bang the Listener can hear.
+		_opened_by_player = true
+		Sound.play_at("bang", global_position + Vector3(0, 2, 0), -6.0, 1.4)
+		sector.emit_noise(global_position, float(Game.mode_data()["door_noise"]), true)
 	if _tween:
 		_tween.kill()
 	_tween = create_tween()
@@ -160,6 +164,10 @@ func close() -> void:
 		return
 	is_open = false
 	Sound.play_at("door", global_position, -8.0, 0.9)
+	if _opened_by_player:
+		# The clank as it shuts gives away where you just were.
+		_opened_by_player = false
+		sector.emit_noise(global_position, 9.0, false)
 	shape.set_deferred("disabled", false)
 	if _tween:
 		_tween.kill()
