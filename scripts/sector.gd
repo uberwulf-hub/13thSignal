@@ -1188,6 +1188,16 @@ func on_rotate_pressed() -> bool:
 	return false
 
 
+## SECTOR HOOK: true where the Replacement can't move at all (Sector 6's lit rooms).
+func replacement_frozen(_pos: Vector3) -> bool:
+	return false
+
+
+## SECTOR HOOK: put sector-specific things back after you're caught.
+func _on_respawn() -> void:
+	pass
+
+
 ## SECTOR HOOK: true where your footsteps make no sound (Sector 4's jammers).
 func noise_muffled(_pos: Vector3) -> bool:
 	return false
@@ -1352,6 +1362,7 @@ func _respawn() -> void:
 	replacement.reset_to(replacement_home)
 	if echo:
 		echo.lose_trail(Game.mode_data()["echo_delay"])
+	_on_respawn()
 	await get_tree().create_timer(0.8).timeout
 	player.frozen = false
 	paused_world = false
@@ -1379,11 +1390,13 @@ func _process(delta: float) -> void:
 		_blackout_t -= delta
 		if _blackout_t <= 0.0:
 			for l in lights:
+				if l.get("off", false):
+					continue   # a light with its power switched off stays off
 				l["light"].visible = true
 				l["fixture"].visible = true
 	else:
 		for l in lights:
-			if l["flicker"]:
+			if l["flicker"] and not l.get("off", false):
 				var on := randf() > 0.04
 				l["light"].visible = on
 				l["fixture"].visible = on

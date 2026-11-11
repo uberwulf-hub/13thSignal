@@ -18,6 +18,7 @@ const SECTORS := [
 	["SECTOR 3: RELAY STATION", "res://scenes/sector_3.tscn"],
 	["SECTOR 4: SECURITY WING", "res://scenes/sector_4.tscn"],
 	["SECTOR 5: PLAYBACK LAB", "res://scenes/sector_5.tscn"],
+	["SECTOR 6: SHOWROOM", "res://scenes/sector_6.tscn"],
 ]
 
 ## Everything that changes between the three modes lives here.

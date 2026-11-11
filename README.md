@@ -127,6 +127,18 @@ holds down **pressure plates**, and each plate holds a door open. Only one copy 
   Your copy makes *your* noise: walk normally while recording and the Listener hears it, finds your copy and
   erases it. Crouch while you record. (In Explorer the Listener leaves copies alone.)
 
+### Sector 6: Showroom
+
+Rooms full of identical store mannequins. Most are props; some are **the Replacement** (1 in Explorer, which
+never catches you, 2 in Survivor, 3 in Nightmare), and you can't tell which until one has moved.
+**Light freezes them:** in a lit room they can't move at all, even when you look away. In the dark they move
+whenever you aren't looking.
+
+The **power board** in the main hall has four circuits (WEST showroom, EAST showroom, STOCKROOM, ELEVATOR) and
+carries **only two at once**. Each circuit lights its room and powers its shutter; a third overloads the board,
+everything goes dark and an alarm goes off. EAST + STOCKROOM gets you the elevator key; WEST + ELEVATOR gets you
+out. Every time you switch, the room you leave goes dark, and the main hall only has emergency lighting.
+
 **Secrets:** 3 signal fragments are hidden in each sector. One is behind a low vent you have to crouch through.
 
 ## Phones and tablets (Android)
@@ -159,13 +171,20 @@ use a different key from Race Track Mayhem's.
 To build just the Android app without releasing, run **Actions → Android → Run workflow**; the `.apk` is kept
 as a download on the run's page.
 
+## Art and models
+
+Floors, walls, ceilings, grates, doors and lockers use real photographed textures from
+[Poly Haven](https://polyhaven.com) (CC0; see `licenses/POLYHAVEN-TEXTURES.txt`). The Replacement and the
+showroom mannequins are built from smooth shapes in code. To use a real mannequin model instead, put a CC0
+`.glb` at `assets/models/mannequin.glb` (see `assets/models/README.md`).
+
 ## Run it from the source code
 
 1. Install **Godot 4.3** (standard version) from <https://godotengine.org/download>.
 2. Open Godot, click **Import**, choose this folder's `project.godot`, then press **F5** to play.
 
 Everything is built in code (`scripts/`). Each sector's map is a text drawing at the top of its script
-(`scripts/sector.gd`, `scripts/sector_2.gd`, `scripts/sector_3.gd`, `scripts/sector_4.gd`, `scripts/sector_5.gd`). Redesign a sector by editing the
+(`scripts/sector.gd`, `scripts/sector_2.gd`, `scripts/sector_3.gd`, `scripts/sector_4.gd`, `scripts/sector_5.gd`, `scripts/sector_6.gd`). Redesign a sector by editing the
 characters; the legend is right above each map.
 
 `scripts/sector.gd` is also the shared base for every sector: monsters, lockers, noise, checkpoints, scares
@@ -191,7 +210,7 @@ The store reads `saucestore.json` from the release's tag, so listing edits go li
 
 ## Where it goes next
 
-- **Sectors 6 to 12**, each with its own puzzle style and a new trick for the monsters.
+- **Sectors 7 to 12**, each with its own puzzle style and a new trick for the monsters.
 - **SUBJECT 13**, the final boss. You only see the whole thing at the end, and you beat it with puzzle mechanics, not firepower.
 - **13 signal fragments** across the game that unlock the true ending.
 - Voice acting for MERIDIAN and ECHO, real recorded sound effects, more rooms and props.

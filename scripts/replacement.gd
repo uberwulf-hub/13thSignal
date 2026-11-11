@@ -186,6 +186,9 @@ func _physics_process(delta: float) -> void:
 	if player.can_see(head) or player.can_see(chest):
 		_unseen = false
 		return   # Frozen while watched.
+	if sector.replacement_frozen(global_position):
+		_unseen = false
+		return   # Frozen in the light.
 	if not _unseen:
 		# You looked away: when you look back, it won't be standing the same way.
 		_unseen = true
@@ -224,6 +227,22 @@ func _physics_process(delta: float) -> void:
 		Sound.play_at("creak", global_position + Vector3(0, 1, 0), -2.0, randf_range(0.8, 1.2))
 	if hunts and dist < 1.25 and not player.hidden_in:
 		sector.on_caught("replacement")
+
+
+## Put any mannequin model (a prop or the real thing) in a random pose.
+static func random_pose(model: Node3D, gentle: bool) -> void:
+	var arms: Array = model.get_meta("arms")
+	if arms.is_empty():
+		var body: Node3D = model.get_meta("body")
+		body.rotation = Vector3(0, randf_range(-0.6, 0.6), randf_range(-0.1, 0.1))
+		return
+	var pose: Array = POSES[randi() % (2 if gentle else POSES.size())]
+	for i in 2:
+		var arm: Node3D = arms[i]
+		var r: Vector2 = pose[i]
+		arm.rotation = Vector3(r.x, 0, r.y)
+	var head: Node3D = model.get_meta("head")
+	head.rotation = pose[2]
 
 
 func _new_pose() -> void:

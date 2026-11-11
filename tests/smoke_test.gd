@@ -423,6 +423,55 @@ func _ready() -> void:
 	s.queue_free()
 	await wait(0.3)
 
+	check(Game.sector_unlocked >= 6, "clearing Sector 5 unlocks Sector 6")
+
+	# --- Sector 6: mannequins and the power board (Survivor) ---
+	Game.scary_unlocked = true
+	Game.mode = Game.Mode.SURVIVOR
+	s = load("res://scenes/sector_6.tscn").instantiate()
+	add_child(s)
+	await wait(1.0)
+	s.listener.set_physics_process(false)
+	s.listener.reset_to(s.cell_to_world(Vector2i(1, 8)))
+	check(s.mannequins.size() == 2, "Survivor has 2 real mannequins among the props")
+	for r in s.mannequins:
+		r.active = false
+	var east = s.doors[Vector2i(19, 6)]
+	check(not east.is_open, "showroom shutters start shut (no power)")
+	s.flip("EAST")
+	await wait(0.2)
+	check(east.is_open, "switching on the EAST circuit opens its shutter")
+	s.flip("STOCKROOM")
+	s.flip("WEST")
+	await wait(0.2)
+	check(not s.power["EAST"] and not s.power["STOCKROOM"] and not east.is_open, "a third circuit overloads the board and everything goes dark")
+	await wait(4.3)
+	s.flip("EAST")
+	s.flip("STOCKROOM")
+	await wait(0.2)
+	check(s.lit_at(s.cell_to_world(Vector2i(20, 2))) and not s.lit_at(s.cell_to_world(Vector2i(5, 13))), "a powered room is lit; the others are dark")
+	var m0 = s.mannequins[0]
+	m0.active = true
+	s.player.global_position = s.cell_to_world(Vector2i(21, 4))
+	s.player.look_at_yaw(0.0)
+	m0.reset_to(s.cell_to_world(Vector2i(16, 2)))
+	var m_before: Vector3 = m0.global_position
+	await wait(1.0)
+	check(m0.global_position.distance_to(m_before) < 0.01, "a mannequin can't move in a lit room, even unseen")
+	m0.active = false
+	s.has_key = true
+	s.flip("EAST")
+	s.flip("STOCKROOM")
+	s.flip("WEST")
+	s.flip("ELEVATOR")
+	await wait(0.3)
+	check(s.exit_open and s.exit_door.is_open, "WEST + ELEVATOR with the key opens the elevator")
+	s.player.global_position = s.cell_to_world(Vector2i(17, 13))
+	await wait(1.0)
+	check(s.ended, "stepping into the elevator finishes Sector 6")
+	s.queue_free()
+	await wait(0.3)
+
 	# --- A harder, less predictable Listener (Survivor) ---
 	Game.scary_unlocked = true
 	Game.mode = Game.Mode.SURVIVOR
