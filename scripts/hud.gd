@@ -50,6 +50,7 @@ var _dread_amount := 0.0
 var _fuzz: ColorRect
 var _fuzz_mat: ShaderMaterial
 var _fuzz_amount := 0.0
+var _glitch_t := 0.0
 
 var _lines: Array = []       # queued intercom lines: [style, text]
 var _line_shown := 0.0
@@ -361,7 +362,16 @@ func set_dread(amount: float) -> void:
 func set_fuzz(amount: float) -> void:
 	_fuzz_amount = lerpf(_fuzz_amount, amount, 0.15)
 	var flicker := 0.6 + 0.4 * randf()
-	_fuzz_mat.set_shader_parameter("amount", _fuzz_amount * 0.3 * flicker)
+	var level := _fuzz_amount * 0.3 * flicker
+	if _glitch_t > 0.0:
+		_glitch_t -= get_process_delta_time()
+		level = maxf(level, 0.55 * flicker)
+	_fuzz_mat.set_shader_parameter("amount", level)
+
+
+## A short burst of static over the whole screen (the Listener glitching).
+func glitch_flash(seconds := 0.25) -> void:
+	_glitch_t = seconds
 
 
 func set_meters(player: Node) -> void:

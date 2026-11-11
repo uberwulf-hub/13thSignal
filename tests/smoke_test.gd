@@ -452,6 +452,21 @@ func _ready() -> void:
 	Game.crouch_time = 60.0
 	s.note_crouch()
 	check(Game.learned_crouch, "in Survivor, crouching a lot teaches it to hear you crawl")
+	# Stare at it: it glitches and jumps a short distance.
+	lis.state = lis.State.WANDER
+	lis.path.clear()
+	lis._wait = 99.0
+	lis._hunch_t = 999.0
+	s.player.global_position = s.cell_to_world(Vector2i(8, 7))
+	lis.reset_to(s.cell_to_world(Vector2i(13, 7)))
+	lis._wait = 99.0
+	s.player.look_at_yaw(-PI / 2.0)
+	s.player.flashlight.visible = true
+	var before: Vector3 = lis.global_position
+	await wait(3.2)
+	var jumped: float = lis.global_position.distance_to(before)
+	var gap_to_you := Vector2(lis.global_position.x - s.player.global_position.x, lis.global_position.z - s.player.global_position.z).length()
+	check(jumped > 1.5 and gap_to_you >= 2.6, "staring at the Listener makes it glitch and jump (never right on top of you)")
 	s.queue_free()
 	await wait(0.3)
 	Game.lock_scary_modes()
@@ -468,6 +483,18 @@ func _ready() -> void:
 	s.listener._wait = 5.0
 	await wait(0.15)
 	check(s.listener.state == s.listener.State.LISTEN, "in Explorer it can't sense a silent player")
+	var el = s.listener
+	el.state = el.State.WANDER
+	el.path.clear()
+	el._hunch_t = 999.0
+	s.player.global_position = s.cell_to_world(Vector2i(8, 7))
+	el.reset_to(s.cell_to_world(Vector2i(13, 7)))
+	el._wait = 99.0
+	s.player.look_at_yaw(-PI / 2.0)
+	s.player.flashlight.visible = true
+	var d_before: float = el.global_position.distance_to(s.player.global_position)
+	await wait(4.8)
+	check(el.global_position.distance_to(s.player.global_position) > d_before, "in Explorer it always glitches away from you")
 	s.queue_free()
 	await wait(0.3)
 

@@ -55,8 +55,10 @@ MERIDIAN at all.
   everywhere, it learns to hear you crawl, and your crouching gets twice as loud.
   **It's hard to predict.** It stops at random to listen, gets hunches about where you are and comes to check,
   and when it hunts you it heads for where you're going and lunges. When it stops to listen, it can sense you
-  close by even if you're silent, so don't stand still right next to it. (Explorer keeps all of this gentle: no
-  crawl-learning, no close-range sensing, no lunges, and rare hunches.)
+  close by even if you're silent, so don't stand still right next to it. **Don't stare at it, either:** look at it too long
+  and it twitches, then glitches out in a burst of static and reappears a few metres away (in Nightmare it
+  prefers to come closer). (Explorer keeps all of this gentle: no
+  crawl-learning, no close-range sensing, no lunges, rare hunches, and it only ever glitches away from you.)
 - **THE REPLACEMENT** is a scientist mannequin that only moves when you can't see it. It wakes up when the power comes back on.
   Keep your light on it.
 - **ECHO** copies MERIDIAN's voice and gives you bad advice. Check what it says against the notes you find.

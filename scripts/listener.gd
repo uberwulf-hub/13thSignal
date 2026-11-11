@@ -39,6 +39,8 @@ var _hunch_t := 30.0
 var _pause_t := 0.0
 var _lunge_t := 4.0
 var _lunge_on := 0.0
+var _stare := 0.0          # how long you've been looking at it
+var _glitch_cool := 0.0
 var _time := 0.0
 
 
@@ -268,6 +270,7 @@ func _physics_process(delta: float) -> void:
 	var player: Node = sector.player
 
 	_unpredictable(delta, m, player)
+	_stare_glitch(delta, m, player)
 
 	match state:
 		State.WANDER:
@@ -379,6 +382,71 @@ func _unpredictable(delta: float, m: Dictionary, player: Node) -> void:
 		if _lunge_t <= 0.0:
 			_lunge_t = randf_range(3.0, 6.0)
 			_lunge_on = 0.7
+
+
+## Look at it too long and it glitches: it twitches, then blinks out in a
+## burst of static and reappears a few metres away. (Explorer: always away
+## from you. Survivor: anywhere. Nightmare: it prefers to come closer.)
+func _stare_glitch(delta: float, m: Dictionary, player: Node) -> void:
+	_glitch_cool = maxf(_glitch_cool - delta, 0.0)
+	var head := global_position + Vector3(0, 2.2, 0)
+	var chest := global_position + Vector3(0, 1.3, 0)
+	var looking: bool = not player.hidden_in and not player.frozen and (player.can_see(head) or player.can_see(chest))
+	if looking and _glitch_cool <= 0.0:
+		_stare += delta
+	else:
+		_stare = maxf(_stare - delta * 2.0, 0.0)
+	var need := float(m["stare_glitch"])
+	# The longer you stare, the more it twitches (a warning).
+	var warn := clampf(_stare / need, 0.0, 1.0)
+	if warn > 0.5:
+		_body.position.x = randf_range(-0.08, 0.08) * warn
+		if randf() < warn * 0.3:
+			_ear_mat.emission_energy_multiplier = 5.0
+	else:
+		_body.position.x = 0.0
+	if _stare >= need:
+		_stare = 0.0
+		_glitch_cool = 3.0
+		glitch_jump(int(m["glitch_bias"]), player)
+
+
+func glitch_jump(bias: int, player: Node) -> void:
+	var here: Vector2i = sector.world_to_cell(global_position)
+	var ppos: Vector3 = player.global_position
+	var best := Vector3.INF
+	var best_score := -INF
+	for dy in range(-2, 3):
+		for dx in range(-2, 3):
+			if dx == 0 and dy == 0:
+				continue
+			var c := here + Vector2i(dx, dy)
+			if not sector.grid.is_in_boundsv(c) or sector.grid.is_point_solid(c):
+				continue
+			var p: Vector3 = sector.cell_to_world(c) + Vector3(randf_range(-0.6, 0.6), 0, randf_range(-0.6, 0.6))
+			var d := Vector2(p.x - ppos.x, p.z - ppos.z).length()
+			if d < 2.6:
+				continue   # never right on top of you
+			if sector.find_path(global_position, p).is_empty() and sector.world_to_cell(p) != here:
+				continue   # never somewhere it couldn't walk to (no jumping through walls into a sealed room)
+			var score := randf()
+			if bias < 0:
+				score = d + randf()          # away from you
+			elif bias > 0:
+				score = -d + randf()         # closer to you
+			if score > best_score:
+				best_score = score
+				best = p
+	if best == Vector3.INF:
+		return
+	Sound.play_at("static", global_position + Vector3(0, 1.5, 0), -4.0, 1.8)
+	visible = false
+	global_position = Vector3(best.x, global_position.y, best.z)
+	path.clear()
+	_repath_t = 0.0
+	Sound.play_at("static", global_position + Vector3(0, 1.5, 0), -4.0, 1.4)
+	sector.hud.glitch_flash(0.25 if bias < 0 else 0.4)
+	get_tree().create_timer(0.12).timeout.connect(func(): visible = true)
 
 
 ## Nothing solid between it and you (it can't sense you through a wall).

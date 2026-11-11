@@ -34,6 +34,7 @@ const MODES := [
 		"echo_delay": 40.0, "echo_speed": 1.7, "echo_catches": false,
 		"learn_crouch": 0.0, "hunch_gap": Vector2(110, 160), "hunch_radius": 12.0,
 		"sense": 0.0, "lunge": false, "predict": 0.0, "door_noise": 13.0,
+		"stare_glitch": 4.0, "glitch_bias": -1,
 	},
 	{
 		"name": "SURVIVOR",
@@ -47,6 +48,7 @@ const MODES := [
 		"echo_delay": 22.0, "echo_speed": 2.3, "echo_catches": true,
 		"learn_crouch": 50.0, "hunch_gap": Vector2(40, 70), "hunch_radius": 9.0,
 		"sense": 3.5, "lunge": true, "predict": 0.8, "door_noise": 16.0,
+		"stare_glitch": 2.5, "glitch_bias": 0,
 	},
 	{
 		"name": "NIGHTMARE",
@@ -60,6 +62,7 @@ const MODES := [
 		"echo_delay": 12.0, "echo_speed": 2.8, "echo_catches": true,
 		"learn_crouch": 25.0, "hunch_gap": Vector2(20, 40), "hunch_radius": 6.0,
 		"sense": 5.0, "lunge": true, "predict": 1.2, "door_noise": 20.0,
+		"stare_glitch": 1.5, "glitch_bias": 1,
 	},
 ]
 
