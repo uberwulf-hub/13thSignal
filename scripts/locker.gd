@@ -14,10 +14,12 @@ func setup(s: Node, wall_normal: Vector3) -> void:
 	collision_layer = 3
 	collision_mask = 0
 	rotation.y = atan2(facing.x, facing.z)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.2, 0.3, 0.28)
-	mat.metallic = 0.5
-	mat.roughness = 0.55
+	var mat: StandardMaterial3D = Game.tex_mat("door", 1.2, Color(0.55, 0.75, 0.7), 0.5)
+	if mat == null:
+		mat = StandardMaterial3D.new()
+		mat.albedo_color = Color(0.2, 0.3, 0.28)
+		mat.metallic = 0.5
+		mat.roughness = 0.55
 	# Body: open at the front.
 	for part in [[Vector3(0.9, 2.1, 0.05), Vector3(0, 1.05, -0.3)],
 			[Vector3(0.05, 2.1, 0.6), Vector3(-0.45, 1.05, 0)],

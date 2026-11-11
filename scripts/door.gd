@@ -30,10 +30,12 @@ func setup(s: Node, c: Vector2i, along_x: bool, k: String) -> void:
 	if not along_x:
 		rotation.y = PI / 2.0
 	var colors := {"door": Color(0.22, 0.26, 0.3), "keycard": Color(0.35, 0.22, 0.12), "exit": Color(0.32, 0.3, 0.12), "vault": Color(0.2, 0.24, 0.22), "gate": Color(0.22, 0.18, 0.3)}
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = colors[kind]
-	mat.metallic = 0.6
-	mat.roughness = 0.45
+	var mat: StandardMaterial3D = Game.tex_mat("door", 0.5, colors[kind].lightened(0.55), 0.5)
+	if mat == null:
+		mat = StandardMaterial3D.new()
+		mat.albedo_color = colors[kind]
+		mat.metallic = 0.6
+		mat.roughness = 0.45
 	panel = MeshInstance3D.new()
 	var bm := BoxMesh.new()
 	bm.size = Vector3(S, H, 0.3)

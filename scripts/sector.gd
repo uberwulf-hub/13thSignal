@@ -285,7 +285,23 @@ func _build_environment() -> void:
 	_env.fog_density = 0.035
 	_env.glow_enabled = Game.gfx() >= 1
 	_env.glow_intensity = 0.6
+	# High graphics: soft shadows in corners and a misty air your flashlight cuts
+	# through. (Phones and the Low setting skip these.)
+	if Game.gfx() >= 1:
+		_env.ssao_enabled = true
+		_env.ssao_radius = 1.5
+		_env.ssao_intensity = 2.5
+	if Game.gfx() >= 2:
+		_env.tonemap_mode = Environment.TONE_MAPPER_ACES
+		_env.tonemap_exposure = 1.1
+		_env.fog_enabled = false
+		_env.volumetric_fog_enabled = true
+		_env.volumetric_fog_density = 0.035
+		_env.volumetric_fog_albedo = Color(0.7, 0.75, 0.8)
+		_env.volumetric_fog_emission = Color(0.0, 0.0, 0.0)
+		_env.volumetric_fog_length = 40.0
 	_env.adjustment_enabled = true
+
 	_env.adjustment_brightness = Game.brightness
 	_env.adjustment_saturation = 0.8
 	var we := WorldEnvironment.new()
@@ -352,10 +368,19 @@ func _label(text: String, pos: Vector3, normal: Vector3, size: int, color: Color
 # =================================================================== level
 
 func _build_level() -> void:
-	var wall_mat := _mat(Color(0.32, 0.36, 0.4), 0.9, 0.0, 0.3)
-	var floor_mat := _mat(Color(0.2, 0.21, 0.22), 0.95, 0.0, 0.5)
-	var ceil_mat := _mat(Color(0.12, 0.13, 0.15), 0.95)
-	var grate_mat := _mat(Color(0.42, 0.3, 0.2), 0.5, 0.7, 0.9)
+	# Real photographed surfaces (Poly Haven, CC0), with the old painted look as a fallback.
+	var wall_mat: Material = Game.tex_mat("wall", 0.33, Color(0.8, 0.82, 0.86))
+	if wall_mat == null:
+		wall_mat = _mat(Color(0.32, 0.36, 0.4), 0.9, 0.0, 0.3)
+	var floor_mat: Material = Game.tex_mat("floor", 0.33, Color(0.75, 0.75, 0.75))
+	if floor_mat == null:
+		floor_mat = _mat(Color(0.2, 0.21, 0.22), 0.95, 0.0, 0.5)
+	var ceil_mat: Material = Game.tex_mat("ceiling", 0.33, Color(0.55, 0.55, 0.58))
+	if ceil_mat == null:
+		ceil_mat = _mat(Color(0.12, 0.13, 0.15), 0.95)
+	var grate_mat: Material = Game.tex_mat("grate", 0.66, Color.WHITE, 0.6)
+	if grate_mat == null:
+		grate_mat = _mat(Color(0.42, 0.3, 0.2), 0.5, 0.7, 0.9)
 
 	# Floor and ceiling, in chunks. (Phones light each object with at most a
 	# few lights, so one huge floor would leave most rooms dark there.)

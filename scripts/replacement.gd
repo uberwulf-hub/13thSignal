@@ -14,70 +14,121 @@ var _home := Vector3.ZERO
 
 
 ## The mannequin itself. Also used for one scripted scare.
+## A real mannequin model, if one has been added to the project (any
+## CC0 glTF/GLB of a human figure). Otherwise a mannequin is built from shapes.
+const MODEL_PATH := "res://assets/models/mannequin.glb"
+const HEIGHT := 1.85
+
+
+static func _plastic() -> StandardMaterial3D:
+	# Glossy, slightly yellowed store-mannequin plastic.
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.78, 0.75, 0.7)
+	m.roughness = 0.28
+	m.clearcoat_enabled = true
+	m.clearcoat = 0.6
+	m.clearcoat_roughness = 0.25
+	m.rim_enabled = true
+	m.rim = 0.25
+	return m
+
+
 static func build_model() -> Node3D:
+	if ResourceLoader.exists(MODEL_PATH):
+		return _imported_model()
+	return _shape_model()
+
+
+## The imported mannequin, scaled to a person's height and given the plastic look.
+static func _imported_model() -> Node3D:
 	var root := Node3D.new()
-	var plastic := StandardMaterial3D.new()
-	plastic.albedo_color = Color(0.86, 0.83, 0.78)
-	plastic.roughness = 0.35
-	var coat := StandardMaterial3D.new()
-	coat.albedo_color = Color(0.92, 0.93, 0.95)
-	coat.roughness = 0.8
-	var dark := StandardMaterial3D.new()
-	dark.albedo_color = Color(0.12, 0.12, 0.14)
-	var parts := [
-		# [mesh, size/params, position, rotation_z, material]
-		["capsule", Vector2(0.09, 0.95), Vector3(-0.13, 0.48, 0), 0.0, dark],
-		["capsule", Vector2(0.09, 0.95), Vector3(0.13, 0.48, 0), 0.0, dark],
-		["box", Vector3(0.52, 0.78, 0.28), Vector3(0, 1.32, 0), 0.0, coat],
-		["box", Vector3(0.56, 0.42, 0.3), Vector3(0, 0.85, 0), 0.0, coat],
-	]
-	for p in parts:
-		var mi := MeshInstance3D.new()
-		match p[0]:
-			"capsule":
-				var c := CapsuleMesh.new()
-				c.radius = p[1].x
-				c.height = p[1].y
-				mi.mesh = c
-			"sphere":
-				var s := SphereMesh.new()
-				s.radius = p[1].x
-				s.height = p[1].y
-				mi.mesh = s
-			_:
-				var b := BoxMesh.new()
-				b.size = p[1]
-				mi.mesh = b
-		mi.position = p[2]
-		mi.rotation.z = p[3]
-		mi.material_override = p[4]
-		root.add_child(mi)
-	# Arms hang from shoulder pivots and the head sits on a neck pivot, so it
-	# can be found in a different pose every time you look back.
+	var scene: Node3D = (load(MODEL_PATH) as PackedScene).instantiate()
+	root.add_child(scene)
+	var plastic := _plastic()
+	var box := AABB()
+	var first := true
+	for mi in scene.find_children("*", "MeshInstance3D", true, false):
+		var m: MeshInstance3D = mi
+		m.material_override = plastic
+		var b: AABB = m.get_aabb()
+		b = m.transform * b
+		box = b if first else box.merge(b)
+		first = false
+	if box.size.y > 0.01:
+		var k := HEIGHT / box.size.y
+		scene.scale = Vector3.ONE * k
+		scene.position.y = -box.position.y * k
+	root.set_meta("arms", [])
+	root.set_meta("head", null)
+	root.set_meta("body", scene)
+	return root
+
+
+## A faceless store mannequin built from smooth shapes, with joints for posing.
+static func _shape_model() -> Node3D:
+	var root := Node3D.new()
+	var plastic := _plastic()
+	var seam := StandardMaterial3D.new()
+	seam.albedo_color = Color(0.45, 0.43, 0.4)
+	seam.roughness = 0.5
+	# Legs: thigh, knee joint, shin, foot.
+	for side in [-1.0, 1.0]:
+		var x: float = 0.11 * side
+		root.add_child(_shape("capsule", Vector3(0.085, 0.5, 0.085), Vector3(x, 0.74, 0), Vector3(0, 0, 0.03 * side), plastic))
+		root.add_child(_shape("sphere", Vector3(0.068, 0.068, 0.068), Vector3(x, 0.5, 0.01), Vector3.ZERO, seam))
+		root.add_child(_shape("capsule", Vector3(0.062, 0.46, 0.062), Vector3(x, 0.27, 0), Vector3.ZERO, plastic))
+		root.add_child(_shape("sphere", Vector3(0.06, 0.04, 0.13), Vector3(x, 0.035, 0.05), Vector3.ZERO, plastic))
+	# Hips, waist, chest and shoulders.
+	root.add_child(_shape("sphere", Vector3(0.2, 0.14, 0.13), Vector3(0, 0.98, 0), Vector3.ZERO, plastic))
+	root.add_child(_shape("capsule", Vector3(0.14, 0.32, 0.1), Vector3(0, 1.14, 0), Vector3.ZERO, plastic))
+	root.add_child(_shape("sphere", Vector3(0.21, 0.2, 0.13), Vector3(0, 1.36, 0.01), Vector3.ZERO, plastic))
+	root.add_child(_shape("capsule", Vector3(0.07, 0.48, 0.07), Vector3(0, 1.47, 0), Vector3(0, 0, PI / 2.0), plastic))
+	# Arms on shoulder pivots, with an elbow joint and flat hands, so it can
+	# be found in a different pose every time you look back.
 	var arms: Array = []
 	for side in [-1.0, 1.0]:
 		var shoulder := Node3D.new()
-		shoulder.position = Vector3(0.33 * side, 1.64, 0)
+		shoulder.position = Vector3(0.25 * side, 1.47, 0)
 		root.add_child(shoulder)
-		shoulder.add_child(_part("capsule", Vector2(0.065, 0.75), Vector3(0, -0.36, 0), coat))
-		shoulder.add_child(_part("sphere", Vector2(0.05, 0.1), Vector3(0, -0.78, 0), plastic))
+		shoulder.add_child(_shape("sphere", Vector3(0.06, 0.06, 0.06), Vector3.ZERO, Vector3.ZERO, seam))
+		shoulder.add_child(_shape("capsule", Vector3(0.05, 0.32, 0.05), Vector3(0.02 * side, -0.17, 0), Vector3(0, 0, 0.06 * side), plastic))
+		shoulder.add_child(_shape("sphere", Vector3(0.045, 0.045, 0.045), Vector3(0.03 * side, -0.33, 0), Vector3.ZERO, seam))
+		shoulder.add_child(_shape("capsule", Vector3(0.042, 0.3, 0.042), Vector3(0.035 * side, -0.49, 0.01), Vector3.ZERO, plastic))
+		shoulder.add_child(_shape("sphere", Vector3(0.045, 0.09, 0.022), Vector3(0.035 * side, -0.69, 0.01), Vector3.ZERO, plastic))
 		arms.append(shoulder)
+	# Neck and a smooth, egg-shaped head with no face at all. Just a hint of a
+	# nose and brow, the way store mannequins have.
 	var neck := Node3D.new()
-	neck.position = Vector3(0, 1.7, 0)
+	neck.position = Vector3(0, 1.56, 0)
 	root.add_child(neck)
-	neck.add_child(_part("capsule", Vector2(0.05, 0.16), Vector3(0, 0.05, 0), plastic))
-	neck.add_child(_part("sphere", Vector2(0.13, 0.32), Vector3(0, 0.23, 0), plastic))
+	neck.add_child(_shape("capsule", Vector3(0.045, 0.14, 0.045), Vector3(0, 0.04, 0), Vector3.ZERO, plastic))
+	neck.add_child(_shape("sphere", Vector3(0.095, 0.125, 0.11), Vector3(0, 0.2, 0.01), Vector3(-0.12, 0, 0), plastic))
+	neck.add_child(_shape("sphere", Vector3(0.016, 0.03, 0.02), Vector3(0, 0.19, 0.115), Vector3(-0.3, 0, 0), plastic))
+	neck.add_child(_shape("capsule", Vector3(0.012, 0.11, 0.012), Vector3(0, 0.235, 0.098), Vector3(0, 0, PI / 2.0), plastic))
 	root.set_meta("arms", arms)
 	root.set_meta("head", neck)
-	# A visitor badge. No face at all.
-	var badge := Label3D.new()
-	badge.text = "VISITOR"
-	badge.font_size = 24
-	badge.pixel_size = 0.003
-	badge.modulate = Color(0.2, 0.3, 0.6)
-	badge.position = Vector3(0.13, 1.5, 0.15)
-	root.add_child(badge)
 	return root
+
+
+## A smooth ellipsoid ("sphere") or capsule, stretched to `size` (radii).
+static func _shape(kind: String, size: Vector3, pos: Vector3, rot: Vector3, mat: Material) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	if kind == "sphere":
+		var sm := SphereMesh.new()
+		sm.radius = 1.0
+		sm.height = 2.0
+		mi.mesh = sm
+		mi.scale = size
+	else:
+		var c := CapsuleMesh.new()
+		c.radius = size.x
+		c.height = size.y
+		mi.mesh = c
+		mi.scale = Vector3(1, 1, size.z / size.x)
+	mi.position = pos
+	mi.rotation = rot
+	mi.material_override = mat
+	return mi
 
 
 static func _part(kind: String, dims: Vector2, pos: Vector3, mat: Material) -> MeshInstance3D:
@@ -180,6 +231,11 @@ func _new_pose() -> void:
 	var choices := 2 if Game.is_explorer() else POSES.size()
 	var pose: Array = POSES[randi() % choices]
 	var arms: Array = _model.get_meta("arms")
+	if arms.is_empty():
+		# An imported model can't bend: it leans and turns a little instead.
+		var body: Node3D = _model.get_meta("body")
+		body.rotation = Vector3(randf_range(-0.12, 0.12), randf_range(-0.6, 0.6), randf_range(-0.15, 0.15))
+		return
 	for i in 2:
 		var arm: Node3D = arms[i]
 		var r: Vector2 = pose[i]

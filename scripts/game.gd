@@ -121,6 +121,34 @@ func use_touch() -> bool:
 	return is_mobile() or DisplayServer.is_touchscreen_available()
 
 
+var _tex_mats: Dictionary = {}
+
+
+## A realistic surface from assets/textures/<surface>/ (colour, bumps and
+## roughness, from Poly Haven, CC0). Wraps around any shape without stretching.
+## Returns null if the textures aren't there, so callers can fall back.
+func tex_mat(surface: String, scale := 0.25, tint := Color.WHITE, metal := 0.0) -> StandardMaterial3D:
+	var key := "%s/%s/%s/%s" % [surface, scale, tint, metal]
+	if _tex_mats.has(key):
+		return _tex_mats[key]
+	var base := "res://assets/textures/%s/" % surface
+	if not ResourceLoader.exists(base + "albedo.jpg"):
+		return null
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = load(base + "albedo.jpg")
+	m.albedo_color = tint
+	m.normal_enabled = true
+	m.normal_texture = load(base + "normal.jpg")
+	m.roughness_texture = load(base + "rough.jpg")
+	m.roughness = 1.0
+	m.metallic = metal
+	m.uv1_triplanar = true
+	m.uv1_scale = Vector3.ONE * scale
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	_tex_mats[key] = m
+	return m
+
+
 ## Hide and lock the mouse for looking around (not on touch screens, where you look by dragging).
 func capture_mouse() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if use_touch() else Input.MOUSE_MODE_CAPTURED

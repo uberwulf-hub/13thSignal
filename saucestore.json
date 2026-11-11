@@ -21,6 +21,12 @@
       "author": "Juan Linietsky, Ariel Manzur and Godot Engine contributors",
       "license": "MIT",
       "source": "https://godotengine.org/license"
+    },
+    {
+      "asset": "Floor, wall, ceiling, grate, door and metal textures",
+      "author": "Poly Haven (polyhaven.com) artists",
+      "license": "CC0 1.0",
+      "source": "https://polyhaven.com/license"
     }
   ]
 }
