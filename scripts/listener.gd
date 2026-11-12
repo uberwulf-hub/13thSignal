@@ -52,12 +52,14 @@ func setup(s: Node) -> void:
 	_audio.unit_size = 7.0
 	_audio.max_distance = 40.0
 	_audio.position.y = 2.0
+	_audio.bus = Sound.WORLD
 	add_child(_audio)
 	_breath = AudioStreamPlayer3D.new()
 	_breath.stream = Sound.stream("listener_breath")
 	_breath.unit_size = 3.0
 	_breath.max_distance = 14.0
 	_breath.position.y = 2.0
+	_breath.bus = Sound.WORLD
 	add_child(_breath)
 	# A wet, rasping breath you hear before you see it.
 	_rasp = AudioStreamPlayer3D.new()
@@ -66,6 +68,7 @@ func setup(s: Node) -> void:
 	_rasp.max_distance = 16.0
 	_rasp.position.y = 2.2
 	_rasp.volume_db = -14.0 if Game.is_explorer() else -4.0
+	_rasp.bus = Sound.WORLD
 	add_child(_rasp)
 	_rasp.play()
 	var gap: Vector2 = Game.mode_data()["hunch_gap"]

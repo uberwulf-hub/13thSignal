@@ -194,8 +194,9 @@ func _physics_process(delta: float) -> void:
 		_bob += delta * hspeed * 2.4
 		if _step_t <= 0.0:
 			_step_t = 2.1
-			var vol := -18.0 if crouching else (-4.0 if sprinting else -10.0)
-			Sound.play("step_grate" if on_grate else "step", vol, randf_range(0.85, 1.15))
+			var kind := "_soft" if crouching else ("_run" if sprinting else "")
+			var vol := -12.0 if crouching else (-3.0 if sprinting else -8.0)
+			Sound.play(("step_grate" if on_grate else "step") + kind, vol, randf_range(0.92, 1.08), true)
 	var eye_target := 0.85 if crouching else 1.6
 	_eye = lerpf(_eye, eye_target, minf(delta * 10.0, 1.0))
 	var bob_amt := 0.05 if sprinting else 0.025

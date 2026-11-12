@@ -83,28 +83,29 @@ static func _shape_model() -> Node3D:
 	root.add_child(_shape("capsule", Vector3(0.14, 0.32, 0.1), Vector3(0, 1.14, 0), Vector3.ZERO, plastic))
 	root.add_child(_shape("sphere", Vector3(0.21, 0.2, 0.13), Vector3(0, 1.36, 0.01), Vector3.ZERO, plastic))
 	root.add_child(_shape("capsule", Vector3(0.07, 0.48, 0.07), Vector3(0, 1.47, 0), Vector3(0, 0, PI / 2.0), plastic))
-	# Arms on shoulder pivots, with an elbow joint and flat hands, so it can
-	# be found in a different pose every time you look back.
+	# Arms on shoulder pivots, with a working elbow and flat hands, so it can
+	# be found standing in a different pose every time you look back.
 	var arms: Array = []
 	for side in [-1.0, 1.0]:
 		var shoulder := Node3D.new()
 		shoulder.position = Vector3(0.25 * side, 1.47, 0)
 		root.add_child(shoulder)
 		shoulder.add_child(_shape("sphere", Vector3(0.06, 0.06, 0.06), Vector3.ZERO, Vector3.ZERO, seam))
-		shoulder.add_child(_shape("capsule", Vector3(0.05, 0.32, 0.05), Vector3(0.02 * side, -0.17, 0), Vector3(0, 0, 0.06 * side), plastic))
-		shoulder.add_child(_shape("sphere", Vector3(0.045, 0.045, 0.045), Vector3(0.03 * side, -0.33, 0), Vector3.ZERO, seam))
-		shoulder.add_child(_shape("capsule", Vector3(0.042, 0.3, 0.042), Vector3(0.035 * side, -0.49, 0.01), Vector3.ZERO, plastic))
-		shoulder.add_child(_shape("sphere", Vector3(0.045, 0.09, 0.022), Vector3(0.035 * side, -0.69, 0.01), Vector3.ZERO, plastic))
+		shoulder.add_child(_shape("capsule", Vector3(0.05, 0.32, 0.05), Vector3(0, -0.165, 0), Vector3.ZERO, plastic))
+		var elbow := Node3D.new()
+		elbow.position = Vector3(0, -0.33, 0)
+		shoulder.add_child(elbow)
+		elbow.add_child(_shape("sphere", Vector3(0.045, 0.045, 0.045), Vector3.ZERO, Vector3.ZERO, seam))
+		elbow.add_child(_shape("capsule", Vector3(0.042, 0.3, 0.042), Vector3(0, -0.16, 0), Vector3.ZERO, plastic))
+		elbow.add_child(_shape("sphere", Vector3(0.045, 0.09, 0.022), Vector3(0, -0.36, 0), Vector3.ZERO, plastic))
+		shoulder.set_meta("elbow", elbow)
 		arms.append(shoulder)
-	# Neck and a smooth, egg-shaped head with no face at all. Just a hint of a
-	# nose and brow, the way store mannequins have.
+	# Neck and a smooth, egg-shaped head. No face at all.
 	var neck := Node3D.new()
 	neck.position = Vector3(0, 1.56, 0)
 	root.add_child(neck)
 	neck.add_child(_shape("capsule", Vector3(0.045, 0.14, 0.045), Vector3(0, 0.04, 0), Vector3.ZERO, plastic))
 	neck.add_child(_shape("sphere", Vector3(0.095, 0.125, 0.11), Vector3(0, 0.2, 0.01), Vector3(-0.12, 0, 0), plastic))
-	neck.add_child(_shape("sphere", Vector3(0.016, 0.03, 0.02), Vector3(0, 0.19, 0.115), Vector3(-0.3, 0, 0), plastic))
-	neck.add_child(_shape("capsule", Vector3(0.012, 0.11, 0.012), Vector3(0, 0.235, 0.098), Vector3(0, 0, PI / 2.0), plastic))
 	root.set_meta("arms", arms)
 	root.set_meta("head", neck)
 	return root
@@ -148,15 +149,22 @@ static func _part(kind: String, dims: Vector2, pos: Vector3, mat: Material) -> M
 	return mi
 
 
-## Poses it can be found in: [left arm (x, z), right arm (x, z), head (x, y, z)].
+## Poses it can be found standing in. Each arm is [shoulder, elbow]
+## rotations (left arm first), then the head. "calm" poses are the only ones
+## used in Explorer; the rest are for Survivor and Nightmare.
 const POSES := [
-	[Vector2(0, 0), Vector2(0, 0), Vector3(0, 0, 0.45)],                 # head tilted
-	[Vector2(0, 0), Vector2(0, 0), Vector3(0.2, 0, -0.5)],
-	[Vector2(-1.5, 0), Vector2(-1.5, 0), Vector3(-0.15, 0, 0)],          # both arms reaching for you
-	[Vector2(-1.5, 0.15), Vector2(0, 0), Vector3(0, 0, 0.6)],            # one arm reaching, head tilted
-	[Vector2(0, 0), Vector2(-2.8, 0), Vector3(0, 0, 0)],                 # one arm raised high
-	[Vector2(-0.4, 0), Vector2(-0.4, 0), Vector3(0, 1.4, 0)],            # head turned to the side
-	[Vector2(-1.2, -0.6), Vector2(-1.2, 0.6), Vector3(0.45, 0, 0)],      # arms spread, head bowed
+	{"name": "standing", "calm": true, "l": [Vector3(0.05, 0, -0.08), Vector3(-0.15, 0, 0)], "r": [Vector3(0.05, 0, 0.08), Vector3(-0.15, 0, 0)], "head": Vector3.ZERO},
+	{"name": "head tilted", "calm": true, "l": [Vector3(0.05, 0, -0.08), Vector3(-0.1, 0, 0)], "r": [Vector3(0.05, 0, 0.08), Vector3(-0.1, 0, 0)], "head": Vector3(0.1, 0, 0.4)},
+	{"name": "thinking", "calm": true, "l": [Vector3(-0.2, 0, -0.05), Vector3(-1.5, 1.2, 0)], "r": [Vector3(-0.85, 0, 0.3), Vector3(-2.55, -0.25, 0)], "head": Vector3(0.25, 0.15, 0.15)},
+	{"name": "hands on hips", "calm": true, "l": [Vector3(0.15, 0, -0.65), Vector3(0, 0, 1.6)], "r": [Vector3(0.15, 0, 0.65), Vector3(0, 0, -1.6)], "head": Vector3(-0.05, 0, 0)},
+	{"name": "arms crossed", "calm": true, "l": [Vector3(-0.25, 0, -0.05), Vector3(-1.65, 1.15, 0)], "r": [Vector3(-0.25, 0, 0.05), Vector3(-1.65, -1.15, 0)], "head": Vector3(0.05, 0, 0)},
+	{"name": "hands behind back", "calm": true, "l": [Vector3(0.35, 0, -0.05), Vector3(-1.4, 2.0, 0)], "r": [Vector3(0.35, 0, 0.05), Vector3(-1.4, -2.0, 0)], "head": Vector3(0, 0, 0)},
+	{"name": "waving", "calm": true, "l": [Vector3(0.05, 0, -0.08), Vector3(-0.1, 0, 0)], "r": [Vector3(0, 0, 2.5), Vector3(0, 0, -0.7)], "head": Vector3(0, 0, -0.15)},
+	{"name": "pointing at you", "calm": false, "l": [Vector3(0.05, 0, -0.08), Vector3(-0.1, 0, 0)], "r": [Vector3(-1.45, 0, 0.05), Vector3.ZERO], "head": Vector3(0, 0, 0.1)},
+	{"name": "reaching", "calm": false, "l": [Vector3(-1.5, 0, 0.05), Vector3(-0.1, 0, 0)], "r": [Vector3(-1.5, 0, -0.05), Vector3(-0.1, 0, 0)], "head": Vector3(-0.15, 0, 0)},
+	{"name": "arm raised", "calm": false, "l": [Vector3(0.05, 0, -0.08), Vector3(-0.1, 0, 0)], "r": [Vector3(-2.8, 0, 0), Vector3.ZERO], "head": Vector3.ZERO},
+	{"name": "head turned", "calm": false, "l": [Vector3(-0.4, 0, 0), Vector3(-0.2, 0, 0)], "r": [Vector3(-0.4, 0, 0), Vector3(-0.2, 0, 0)], "head": Vector3(0, 1.4, 0)},
+	{"name": "arms spread, head bowed", "calm": false, "l": [Vector3(0, 0, -1.3), Vector3.ZERO], "r": [Vector3(0, 0, 1.3), Vector3.ZERO], "head": Vector3(0.45, 0, 0)},
 ]
 
 var _model: Node3D
@@ -221,10 +229,18 @@ func _physics_process(delta: float) -> void:
 			sector.monster_entering(path[0])
 	else:
 		global_position += to.normalized() * step
+	# The sound of it following you: hollow plastic feet, creaking joints, and
+	# now and then a foot dragged along the floor. You only ever hear it while
+	# it moves, and it only moves while you aren't looking.
 	_creak_t -= delta
-	if _creak_t <= 0.0 and dist < 16.0:
-		_creak_t = randf_range(0.6, 1.2)
-		Sound.play_at("creak", global_position + Vector3(0, 1, 0), -2.0, randf_range(0.8, 1.2))
+	if _creak_t <= 0.0 and dist < 22.0:
+		_creak_t = randf_range(0.38, 0.5)
+		var quiet := -8.0 if Game.is_explorer() else -2.0
+		Sound.play_at("mq_step", global_position, quiet, randf_range(0.92, 1.08))
+		if randf() < 0.3:
+			Sound.play_at("mq_creak", global_position + Vector3(0, 1.2, 0), quiet - 2.0, randf_range(0.85, 1.1))
+		elif randf() < 0.15:
+			Sound.play_at("mq_scrape", global_position, quiet - 3.0, randf_range(0.9, 1.1))
 	if hunts and dist < 1.25 and not player.hidden_in:
 		sector.on_caught("replacement")
 
@@ -236,28 +252,32 @@ static func random_pose(model: Node3D, gentle: bool) -> void:
 		var body: Node3D = model.get_meta("body")
 		body.rotation = Vector3(0, randf_range(-0.6, 0.6), randf_range(-0.1, 0.1))
 		return
-	var pose: Array = POSES[randi() % (2 if gentle else POSES.size())]
+	var choices: Array = []
+	for p in POSES:
+		if p["calm"] or not gentle:
+			choices.append(p)
+	apply_pose(model, choices[randi() % choices.size()])
+
+
+static func apply_pose(model: Node3D, pose: Dictionary) -> void:
+	var arms: Array = model.get_meta("arms")
+	if arms.is_empty():
+		return
 	for i in 2:
-		var arm: Node3D = arms[i]
-		var r: Vector2 = pose[i]
-		arm.rotation = Vector3(r.x, 0, r.y)
+		var shoulder: Node3D = arms[i]
+		var a: Array = pose["l"] if i == 0 else pose["r"]
+		shoulder.rotation = a[0]
+		var elbow: Node3D = shoulder.get_meta("elbow")
+		elbow.rotation = a[1]
 	var head: Node3D = model.get_meta("head")
-	head.rotation = pose[2]
+	head.rotation = pose["head"]
 
 
 func _new_pose() -> void:
-	# Explorer only ever gets the gentle head tilts.
-	var choices := 2 if Game.is_explorer() else POSES.size()
-	var pose: Array = POSES[randi() % choices]
 	var arms: Array = _model.get_meta("arms")
 	if arms.is_empty():
 		# An imported model can't bend: it leans and turns a little instead.
 		var body: Node3D = _model.get_meta("body")
 		body.rotation = Vector3(randf_range(-0.12, 0.12), randf_range(-0.6, 0.6), randf_range(-0.15, 0.15))
 		return
-	for i in 2:
-		var arm: Node3D = arms[i]
-		var r: Vector2 = pose[i]
-		arm.rotation = Vector3(r.x, 0, r.y)
-	var head: Node3D = _model.get_meta("head")
-	head.rotation = pose[2]
+	random_pose(_model, Game.is_explorer())

@@ -61,6 +61,7 @@ func setup(s: Node) -> void:
 	_whisper.max_distance = 18.0
 	_whisper.position.y = 1.7
 	_whisper.volume_db = -16.0 if Game.is_explorer() else -6.0
+	_whisper.bus = Sound.WORLD
 	add_child(_whisper)
 	visible = false
 	_wait = float(Game.mode_data()["echo_delay"])

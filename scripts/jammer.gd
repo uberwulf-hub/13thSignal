@@ -85,6 +85,7 @@ func setup(s: Node, c: Vector2i) -> void:
 	_hum.unit_size = 1.5
 	_hum.max_distance = 10.0
 	_hum.volume_db = -10.0
+	_hum.bus = Sound.WORLD
 	add_child(_hum)
 	_hum.play()
 
