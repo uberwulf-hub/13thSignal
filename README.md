@@ -41,6 +41,9 @@ MERIDIAN at all.
 | Flashlight | F | Y |
 | Hold your breath (in a locker) | Space (hold) | X (hold) |
 | Turn a relay (Sector 3) / stop recording (Sector 5) | R | Right bumper |
+| Use / throw the item in your hand | Left mouse button | Right trigger |
+| Pick an inventory slot | 1-6 or the scroll wheel | D-pad left / right |
+| Drop the item in your hand | G | D-pad down |
 | Journal (clues) | Tab or J (hold) | Back/View |
 | Pause | Esc | Start |
 
@@ -70,6 +73,20 @@ MERIDIAN at all.
 4. The elevator door shows a colour order. Find the four painted numbers (red, blue, green, yellow) around the sector.
    Look at them with your light and they go in your journal.
 5. Type the code at the elevator and step in.
+
+### Items and your inventory
+
+Your flashlight is in your left hand; your right hand holds whatever you've picked from your **inventory**
+(six slots, along the bottom of the screen). Everyday things lie around every sector, somewhere different each game.
+Look at one and press **E** to pick it up.
+
+| Item | What it does |
+|---|---|
+| Battery | Recharges your flashlight |
+| Glow stick | Crack it and toss it: it lights the area for about a minute and a half, and mannequins can't move in its light |
+| Soda can, glass bottle, wrench | **Throw it to distract the Listener**: it goes to check where it landed, not where you are. Bottles smash and carry the furthest |
+| Coffee mug, stapler, clipboard | Mostly junk, but you can throw them as a (quieter) distraction. Mugs break |
+| Old photograph, ID badge | Look at them for a scrap of the story |
 
 ### Sector 2: Archives
 

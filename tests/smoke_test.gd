@@ -472,6 +472,77 @@ func _ready() -> void:
 	s.queue_free()
 	await wait(0.3)
 
+	# --- Inventory: items to pick up, use and throw (Survivor) ---
+	Game.scary_unlocked = true
+	Game.mode = Game.Mode.SURVIVOR
+	s = load("res://scenes/sector.tscn").instantiate()
+	add_child(s)
+	await wait(1.2)
+	var WI = load("res://scripts/world_item.gd")
+	var loot := 0
+	for c in s.get_children():
+		if c.get_script() == WI:
+			loot += 1
+	check(loot >= 10, "everyday items are scattered through the sector (%d)" % loot)
+	var pl = s.player
+	pl.inventory.clear()
+	var it = WI.new()
+	s.add_child(it)
+	it.setup(s, "battery")
+	it.global_position = pl.global_position + Vector3(0.5, 0.2, 0)
+	it.interact(pl)
+	check(pl.selected_id() == "battery", "picking an item up puts it in your inventory (and your hand)")
+	pl.add_item("battery")
+	check(pl.inventory.size() == 1 and pl.inventory[0]["count"] == 2, "matching items stack in one slot")
+	pl.battery = 10.0
+	pl.use_item()
+	check(pl.battery >= 69.0 and pl.inventory[0]["count"] == 1, "a battery recharges the flashlight")
+	for id in ["soda_can", "glowstick", "photo", "wrench", "clipboard"]:
+		pl.add_item(id)
+	check(not pl.add_item("bottle"), "six slots: a full inventory refuses more")
+	var ev := InputEventAction.new()
+	ev.action = "slot_2"
+	ev.pressed = true
+	Game.touch_mode = 1   # (a headless test has no captured mouse; touch mode lets input through)
+	pl._unhandled_input(ev)
+	Game.touch_mode = 0
+	check(pl.selected_id() == "soda_can", "the number keys pick a slot")
+	# Throw the can: the Listener goes to where it lands, not to you.
+	var lis2 = s.listener
+	lis2.set_physics_process(true)
+	pl.global_position = s.cell_to_world(Vector2i(3, 7))
+	pl.look_at_yaw(-PI / 2.0)
+	pl.pitch = 0.0
+	pl._apply_look()
+	lis2.reset_to(s.cell_to_world(Vector2i(8, 8)))
+	lis2._wait = 99.0
+	lis2._hunch_t = 999.0
+	pl.use_item()
+	await wait(1.5)
+	check(lis2.state == lis2.State.INVESTIGATE or lis2.state == lis2.State.LISTEN, "a thrown can makes a noise that draws the Listener")
+	check(lis2.last_heard.distance_to(pl.global_position) > 4.0, "...to where it landed, not to you")
+	lis2.set_physics_process(false)
+	lis2.reset_to(s.cell_to_world(Vector2i(1, 9)))
+	# A glow stick holds a mannequin still in its light.
+	pl.select_slot(1)
+	check(pl.selected_id() == "glowstick", "the glow stick is in slot 2 now")
+	pl.use_item()
+	await wait(1.0)
+	check(s.glows.size() == 1 and s.near_glow(s.glows[0].global_position, 1.0), "a cracked glow stick lights up")
+	var rep = s.replacement
+	rep.active = true
+	rep.reset_to(s.glows[0].global_position + Vector3(1.5, 0, 0))
+	pl.look_at_yaw(PI / 2.0)
+	var rp: Vector3 = rep.global_position
+	await wait(0.8)
+	check(rep.global_position.distance_to(rp) < 0.01, "a mannequin can't move in a glow stick's light")
+	rep.active = false
+	var before_count: int = pl.inventory.size()
+	pl.drop_item()
+	check(pl.inventory.size() == before_count - 1, "G drops the item in your hand")
+	s.queue_free()
+	await wait(0.3)
+
 	# --- A harder, less predictable Listener (Survivor) ---
 	Game.scary_unlocked = true
 	Game.mode = Game.Mode.SURVIVOR

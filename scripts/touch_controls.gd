@@ -26,6 +26,7 @@ func setup(s: Node) -> Node:
 	layer = 4
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_add("use", "USE", "interact", 170, Color(0.3, 0.85, 1.0))
+	_add("item", "ITEM", "use_item", 110, Color(1.0, 0.75, 0.35))
 	_add("light", "LIGHT", "flashlight", 110, Color(1.0, 0.9, 0.4))
 	_add("run", "RUN", "", 120, Color(0.4, 1.0, 0.5))
 	_add("crouch", "CROUCH", "", 120, Color(0.7, 0.6, 1.0))
@@ -55,6 +56,7 @@ func _layout() -> void:
 	var h := sz.y
 	# Kept clear of the subtitles (bottom middle) and the mode/fragment text (top right).
 	_place("use", Vector2(w - 210, h - 230))
+	_place("item", Vector2(w - 520, h - 300))
 	_place("run", Vector2(w - 380, h - 300))
 	_place("crouch", Vector2(w - 200, h - 400))
 	_place("light", Vector2(w - 330, h - 560))
@@ -92,6 +94,7 @@ func _process(_delta: float) -> void:
 	_buttons["run"].visible = not hidden
 	_buttons["crouch"].visible = not hidden
 	_buttons["turn"].visible = sector.sector_id >= 3 and not hidden
+	_buttons["item"].visible = not hidden and sector.player != null and sector.player.selected_id() != ""
 	# You can't keep running once you're out of breath.
 	if _toggles["run"] and sector.player and sector.player.stamina <= 0.0:
 		_toggle("run", "sprint")
@@ -116,6 +119,9 @@ func _input(event: InputEvent) -> void:
 		if event.pressed:
 			if _on_button(event.position):
 				return
+			var h := get_viewport().get_visible_rect().size.y
+			if event.position.y > h - 90.0 and absf(event.position.x - w * 0.5) < 230.0:
+				return   # that's the inventory hotbar
 			if event.position.x < w * 0.42 and _stick_index == -1:
 				_stick_index = event.index
 				_stick_origin = event.position

@@ -22,6 +22,8 @@ var _sub_text: Label
 var _toast: Label
 var _toast_t := 0.0
 var _status: Label
+var _hotbar: HBoxContainer
+var _slots: Array = []   # [Button]
 var _mode_label: Label
 var _frag_label: Label
 var _noise_bar: ProgressBar
@@ -157,7 +159,7 @@ void fragment() {
 	_sub_box = PanelContainer.new()
 	_sub_box.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_sub_box.custom_minimum_size = Vector2(660, 0)
-	_sub_box.position += Vector2(-310, -120)
+	_sub_box.position += Vector2(-310, -200)
 	_sub_box.visible = false
 	_root.add_child(_sub_box)
 	var sv := VBoxContainer.new()
@@ -169,6 +171,23 @@ void fragment() {
 	_sub_text.custom_minimum_size.x = 620
 	sv.add_child(_sub_text)
 
+	# The inventory hotbar, bottom middle. Keys 1-6, the scroll wheel, or tap a slot.
+	_hotbar = HBoxContainer.new()
+	_hotbar.add_theme_constant_override("separation", 6)
+	_hotbar.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_hotbar.position += Vector2(-6 * 64 / 2.0 - 15, -78)
+	_root.add_child(_hotbar)
+	for i in 6:
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(64, 64)
+		b.focus_mode = Control.FOCUS_NONE
+		b.add_theme_font_size_override("font_size", 13)
+		b.pressed.connect(func():
+			if sector and sector.player:
+				sector.player.select_slot(i))
+		_hotbar.add_child(b)
+		_slots.append(b)
+	set_hotbar([], 0)
 	_status = _label("", 24, Color(1.0, 0.3, 0.3))
 	_status.set_anchors_preset(Control.PRESET_CENTER_TOP)
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -379,6 +398,20 @@ func set_meters(player: Node) -> void:
 	_stamina_bar.value = player.stamina
 	_battery_bar.value = player.battery
 	_breath_bar.value = player.breath
+
+
+func set_hotbar(inventory: Array, selected: int) -> void:
+	for i in _slots.size():
+		var b: Button = _slots[i]
+		var text := "%d\n" % (i + 1)
+		if i < inventory.size():
+			var id: String = inventory[i]["id"]
+			var info: Dictionary = preload("res://scripts/items.gd").info(id)
+			text += info.get("short", id)
+			if int(inventory[i]["count"]) > 1:
+				text += " x%d" % inventory[i]["count"]
+		b.text = text
+		b.modulate = Color(1.3, 1.3, 0.8) if i == selected else Color(1, 1, 1, 0.75)
 
 
 func show_locker(on: bool) -> void:

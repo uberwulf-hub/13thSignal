@@ -122,6 +122,7 @@ var wander_cells: Array[Vector2i] = []
 var lights: Array = []           # [{light, fixture, flicker}]
 var intercoms: Array = []        # [{cell, lamp}]
 var traps: Array = []
+var glows: Array = []            # lit glow sticks
 
 var start_cell := Vector2i.ZERO
 var listener_home := Vector3.ZERO
@@ -174,6 +175,7 @@ func _ready() -> void:
 	hud.sector = self
 	add_child(hud)
 	_spawn_actors()
+	_spawn_loot()
 	if Game.use_touch():
 		add_child(TouchControls.new().setup(self))
 	hud.set_fragments(0, fragment_total)
@@ -777,6 +779,56 @@ func _spawn_actors() -> void:
 		echo = Echo.new()
 		add_child(echo)
 		echo.setup(self)
+
+
+## Scatter everyday items through the sector, somewhere different each game:
+## batteries, glow sticks, things to throw, and some that are just junk.
+func _spawn_loot() -> void:
+	const Items := preload("res://scripts/items.gd")
+	const WorldItem := preload("res://scripts/world_item.gd")
+	# Only squares you can actually walk to (not behind glass, not inside walls).
+	var reach: Dictionary = {start_cell: true}
+	var todo: Array[Vector2i] = [start_cell]
+	while not todo.is_empty():
+		var at: Vector2i = todo.pop_back()
+		for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+			var nb: Vector2i = at + d
+			if not reach.has(nb) and not ch(nb) in ["#", "w", "Q", "O", "W", "Z", "T", "S"]:
+				reach[nb] = true
+				todo.append(nb)
+	var spots: Array[Vector2i] = []
+	for r in rows:
+		for c in cols:
+			var cell := Vector2i(c, r)
+			var room := room_at(cell)
+			if ch(cell) != "." or room == "" or room == "ELEVATOR" or cell == start_cell or grates.has(cell) or not reach.has(cell):
+				continue
+			var near_door := false
+			for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+				if not ch(cell + d) in [".", "#", "g", "L", "f", "i"]:
+					near_door = true
+			if not near_door:
+				spots.append(cell)
+	spots.shuffle()
+	var n := 0
+	for id in Items.SPAWN:
+		for k in int(Items.SPAWN[id][Game.mode]):
+			if n >= spots.size():
+				return
+			var w := WorldItem.new()
+			add_child(w)
+			w.setup(self, id)
+			w.global_position = cell_to_world(spots[n]) + Vector3(randf_range(-1.0, 1.0), 0.05, randf_range(-1.0, 1.0))
+			w.rotation.y = randf() * TAU
+			n += 1
+
+
+## Is there a lit glow stick within `radius` of this point?
+func near_glow(pos: Vector3, radius: float) -> bool:
+	for g in glows:
+		if is_instance_valid(g) and g.glowing() and g.global_position.distance_to(pos) <= radius:
+			return true
+	return false
 
 
 func emit_noise(pos: Vector3, radius: float, from_player: bool) -> void:

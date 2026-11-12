@@ -194,7 +194,7 @@ func _physics_process(delta: float) -> void:
 	if player.can_see(head) or player.can_see(chest):
 		_unseen = false
 		return   # Frozen while watched.
-	if sector.replacement_frozen(global_position):
+	if sector.replacement_frozen(global_position) or sector.near_glow(global_position, 4.0):
 		_unseen = false
 		return   # Frozen in the light.
 	if not _unseen:

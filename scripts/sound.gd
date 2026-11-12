@@ -301,6 +301,24 @@ func _generate() -> void:
 		creak[i] = (pulse * 0.5 + randf_range(-0.05, 0.05)) * sin(PI * t / 0.5)
 	_streams["creak"] = _wav(creak)
 
+	# Items: picking up, a battery clicking in, a glow stick snapping, a throw,
+	# and things landing (metal clangs, glass smashes, soft thuds).
+	_streams["pickup_item"] = _wav(_mix(_noise(0.12, 0.5, 30.0, 0.35), _tone([[1400.0, 0.05]], 0.06, "sine", 40.0)))
+	_streams["battery_click"] = _wav(_mix(_noise(0.04, 0.9, 120.0, 0.7), _noise(0.04, 0.9, 120.0, 0.6), int(0.09 * RATE)))
+	var snap := _noise(0.05, 0.95, 90.0, 0.9)
+	snap = _mix(snap, _noise(0.6, 0.6, 5.0, 0.12), int(0.03 * RATE))   # the fizz as it starts to glow
+	_streams["glow_crack"] = _wav(snap)
+	var whoosh := _buf(0.3)
+	var wl := 0.0
+	for i in whoosh.size():
+		var t := float(i) / RATE
+		wl += (0.05 + 0.4 * t / 0.3) * (randf_range(-1.0, 1.0) - wl)
+		whoosh[i] = wl * sin(PI * t / 0.3) * 0.6
+	_streams["throw_whoosh"] = _wav(whoosh)
+	_set_variants("hit_metal", 3, func(): return _step_metal(0.8))
+	_set_variants("hit_glass", 3, func(): return _glass_smash())
+	_set_variants("hit_soft", 3, func(): return _step_concrete(0.8))
+
 	# The mannequin moving: hollow plastic feet on concrete, creaking joints,
 	# and a foot dragging along the floor.
 	_set_variants("mq_step", 5, func(): return _mq_step())
@@ -509,3 +527,22 @@ func _mq_scrape() -> PackedFloat32Array:
 	var out := a.duplicate()
 	_add(out, _reso(a, 620.0, 30.0), 0.01)
 	return _normalize(out, 0.55)
+
+
+## Glass smashing: a sharp crack, then bright shards tinkling down.
+func _glass_smash() -> PackedFloat32Array:
+	var dur := 1.1
+	var excite := _buf(dur)
+	for j in int(0.004 * RATE):
+		excite[j] = randf_range(-1.0, 1.0)
+	for k in 28:   # the shards
+		var start := int(randf_range(0.02, 0.8) * RATE)
+		var amp := randf_range(0.1, 0.5) * exp(-float(start) / RATE * 2.5)
+		for j in int(0.002 * RATE):
+			if start + j < excite.size():
+				excite[start + j] += randf_range(-1.0, 1.0) * amp
+	var out := _buf(dur)
+	for m in [[2350.0, 30.0], [3100.0, 38.0], [4200.0, 45.0], [5300.0, 55.0], [6800.0, 65.0]]:
+		_add(out, _reso(excite, m[0] * randf_range(0.9, 1.1), m[1]), 0.02)
+	_add(out, excite, 0.5)
+	return _normalize(out, 0.85)

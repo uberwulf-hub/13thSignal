@@ -26,6 +26,15 @@ var breath := 100.0
 var holding_breath := false
 var hidden_in: Node = null
 var carrying: Node = null   # a relay you're holding (Sector 3)
+
+# --- Inventory: six slots; the selected item is in your right hand ---
+const Items := preload("res://scripts/items.gd")
+const WorldItem := preload("res://scripts/world_item.gd")
+const SLOTS := 6
+var inventory: Array = []   # [{"id": String, "count": int}], at most SLOTS
+var selected := 0
+var _hand: Node3D           # holds the selected item's model
+var _hand_id := ""
 var frozen := false
 var noise := 0.0           # how loud you are right now (metres the sound carries)
 var _gasp_lock := 0.0
@@ -59,8 +68,48 @@ func _ready() -> void:
 	flashlight.light_energy = 3.0
 	flashlight.light_color = Color(1.0, 0.95, 0.85)
 	flashlight.shadow_enabled = Game.gfx() >= 1
-	flashlight.position = Vector3(0.18, -0.15, 0.0)
+	# The flashlight is in your left hand.
+	var torch := Node3D.new()
+	torch.position = Vector3(-0.45, -0.36, -0.6)
+	torch.rotation = Vector3(0.05, 0.08, 0)
+	cam.add_child(torch)
+	var body_mat := StandardMaterial3D.new()
+	body_mat.albedo_color = Color(0.32, 0.33, 0.35)   # brushed grey metal
+	body_mat.roughness = 0.3
+	body_mat.metallic = 0.7
+	var tube := MeshInstance3D.new()
+	var tm := CylinderMesh.new()
+	tm.top_radius = 0.024
+	tm.bottom_radius = 0.02
+	tm.height = 0.24
+	tube.mesh = tm
+	tube.material_override = body_mat
+	tube.rotation.x = PI / 2.0
+	torch.add_child(tube)
+	var head := MeshInstance3D.new()
+	var hm := CylinderMesh.new()
+	hm.top_radius = 0.034
+	hm.bottom_radius = 0.026
+	hm.height = 0.06
+	head.mesh = hm
+	head.material_override = body_mat
+	head.rotation.x = PI / 2.0
+	head.position.z = -0.14
+	torch.add_child(head)
+	flashlight.position = Vector3(-0.45, -0.36, -0.76)
 	cam.add_child(flashlight)
+	# Your right hand holds the selected item.
+	_hand = Node3D.new()
+	_hand.position = Vector3(0.52, -0.34, -0.6)
+	_hand.rotation = Vector3(0.25, -0.35, 0)
+	cam.add_child(_hand)
+	# A little light spilling back from the flashlight, so you can see your hands.
+	var spill := OmniLight3D.new()
+	spill.light_energy = 0.35
+	spill.omni_range = 1.1
+	spill.light_color = Color(1.0, 0.95, 0.85)
+	spill.position = Vector3(0, -0.2, -0.35)
+	cam.add_child(spill)
 	ray = RayCast3D.new()
 	ray.target_position = Vector3(0, 0, -2.4)
 	ray.collision_mask = 3
@@ -101,6 +150,16 @@ func _unhandled_input(event: InputEvent) -> void:
 			var hit := ray.get_collider()
 			if hit and hit.has_method("interact"):
 				hit.interact(self)
+	elif event.is_action_pressed("use_item") and not hidden_in and not carrying:
+		use_item()
+	elif event.is_action_pressed("drop_item") and not hidden_in:
+		drop_item()
+	elif event.is_action_pressed("item_next"):
+		select_slot((selected + 1) % SLOTS)
+	elif event.is_action_pressed("item_prev"):
+		select_slot((selected + SLOTS - 1) % SLOTS)
+	elif _slot_pressed(event) >= 0:
+		select_slot(_slot_pressed(event))
 	elif event.is_action_pressed("rotate"):
 		if sector.on_rotate_pressed():
 			pass
@@ -318,3 +377,119 @@ func can_see(point: Vector3) -> bool:
 
 func eye_position() -> Vector3:
 	return cam.global_position
+
+
+# ================================================================ inventory
+
+func _slot_pressed(event: InputEvent) -> int:
+	for i in SLOTS:
+		if event.is_action_pressed("slot_%d" % (i + 1)):
+			return i
+	return -1
+
+
+## Put an item in your inventory (stacking with the same kind). False if full.
+func add_item(id: String) -> bool:
+	var info := Items.info(id)
+	for slot in inventory:
+		if slot["id"] == id and slot["count"] < int(info.get("stack", 1)):
+			slot["count"] += 1
+			_inventory_changed()
+			sector.hud.toast("Picked up: " + info["name"], 1.8)
+			return true
+	if inventory.size() >= SLOTS:
+		sector.hud.toast("Your pockets are full. Drop something (G) first.", 2.5)
+		return false
+	inventory.append({"id": id, "count": 1})
+	if inventory.size() == 1:
+		selected = 0
+	_inventory_changed()
+	sector.hud.toast("Picked up: %s   (%d to select it)" % [info["name"], inventory.size()], 2.5)
+	return true
+
+
+func selected_id() -> String:
+	return inventory[selected]["id"] if selected < inventory.size() else ""
+
+
+func select_slot(i: int) -> void:
+	selected = clampi(i, 0, SLOTS - 1)
+	Sound.play("click", -16.0, 1.3)
+	_inventory_changed()
+
+
+func _take_one() -> void:
+	var slot: Dictionary = inventory[selected]
+	slot["count"] -= 1
+	if slot["count"] <= 0:
+		inventory.remove_at(selected)
+		selected = mini(selected, maxi(inventory.size() - 1, 0))
+	_inventory_changed()
+
+
+func _inventory_changed() -> void:
+	sector.hud.set_hotbar(inventory, selected)
+	var id := selected_id()
+	if id == _hand_id:
+		return
+	_hand_id = id
+	for c in _hand.get_children():
+		c.queue_free()
+	if id != "":
+		var m := Items.model(id)
+		m.scale = Vector3.ONE * 1.1
+		_hand.add_child(m)
+
+
+## Use the item in your hand: a battery goes in the flashlight, a glow stick
+## is cracked and tossed, anything else is thrown (to make a noise somewhere
+## else), and a photo or badge is looked at.
+func use_item() -> void:
+	var id := selected_id()
+	if id == "" or frozen:
+		return
+	var info := Items.info(id)
+	match info["kind"]:
+		"battery":
+			if battery >= 99.0:
+				sector.hud.toast("Your flashlight is already full.", 1.8)
+				return
+			battery = minf(battery + 60.0, 100.0)
+			Sound.play("battery_click", -6.0)
+			sector.hud.toast("New battery in. Flashlight recharged.", 2.0)
+			_take_one()
+		"glow":
+			Sound.play("glow_crack", -4.0)
+			_throw(id, 5.0, true)
+			_take_one()
+		"throw":
+			Sound.play("throw_whoosh", -8.0, randf_range(0.9, 1.1))
+			_throw(id, 13.0, false)
+			_take_one()
+		"read":
+			sector.hud.show_note(info["name"].to_upper(), info["text"])
+			sector.hud.add_clue(info["name"] + ": " + info["text"])
+
+
+## Drop the item in your hand at your feet (quietly).
+func drop_item() -> void:
+	var id := selected_id()
+	if id == "":
+		return
+	var w := WorldItem.new()
+	sector.add_child(w)
+	w.setup(sector, id)
+	var fwd := -global_transform.basis.z
+	w.global_position = global_position + Vector3(fwd.x, 0, fwd.z).normalized() * 0.7 + Vector3(0, 0.3, 0)
+	_take_one()
+
+
+func _throw(id: String, speed: float, lit: bool) -> void:
+	var w := WorldItem.new()
+	sector.add_child(w)
+	w.setup(sector, id, lit)
+	w.thrown = true
+	var fwd := -cam.global_transform.basis.z
+	w.global_position = cam.global_position + fwd * 0.5 + cam.global_transform.basis.x * 0.2
+	w.linear_velocity = fwd * speed + Vector3(0, 2.0, 0) + velocity * 0.5
+	w.angular_velocity = Vector3(randf_range(-8, 8), randf_range(-8, 8), randf_range(-8, 8))

@@ -263,12 +263,15 @@ func _setup_input() -> void:
 		"sprint": [KEY_SHIFT], "crouch": [KEY_CTRL, KEY_C],
 		"interact": [KEY_E], "flashlight": [KEY_F], "hold_breath": [KEY_SPACE],
 		"journal": [KEY_TAB, KEY_J], "pause": [KEY_ESCAPE, KEY_P],
-		"rotate": [KEY_R],
+		"rotate": [KEY_R], "drop_item": [KEY_G],
+		"slot_1": [KEY_1], "slot_2": [KEY_2], "slot_3": [KEY_3],
+		"slot_4": [KEY_4], "slot_5": [KEY_5], "slot_6": [KEY_6],
 	}
 	var pad_buttons := {
 		"interact": JOY_BUTTON_A, "crouch": JOY_BUTTON_B, "flashlight": JOY_BUTTON_Y,
 		"journal": JOY_BUTTON_BACK, "pause": JOY_BUTTON_START, "sprint": JOY_BUTTON_LEFT_STICK,
 		"hold_breath": JOY_BUTTON_X, "rotate": JOY_BUTTON_RIGHT_SHOULDER,
+		"item_next": JOY_BUTTON_DPAD_RIGHT, "item_prev": JOY_BUTTON_DPAD_LEFT, "drop_item": JOY_BUTTON_DPAD_DOWN,
 	}
 	var pad_axes := {
 		"move_left": [JOY_AXIS_LEFT_X, -1.0], "move_right": [JOY_AXIS_LEFT_X, 1.0],
@@ -278,6 +281,8 @@ func _setup_input() -> void:
 	}
 	for action in ["move_forward", "move_back", "move_left", "move_right", "sprint", "crouch",
 			"interact", "flashlight", "hold_breath", "journal", "pause", "rotate",
+			"use_item", "drop_item", "item_next", "item_prev",
+			"slot_1", "slot_2", "slot_3", "slot_4", "slot_5", "slot_6",
 			"look_left", "look_right", "look_up", "look_down"]:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action, 0.2)
@@ -294,6 +299,19 @@ func _setup_input() -> void:
 			ja.axis = pad_axes[action][0]
 			ja.axis_value = pad_axes[action][1]
 			InputMap.action_add_event(action, ja)
+	# Items: left mouse button (or the right trigger) uses/throws, the scroll
+	# wheel picks the next or previous item.
+	var lmb := InputEventMouseButton.new()
+	lmb.button_index = MOUSE_BUTTON_LEFT
+	InputMap.action_add_event("use_item", lmb)
+	var rt := InputEventJoypadMotion.new()
+	rt.axis = JOY_AXIS_TRIGGER_RIGHT
+	rt.axis_value = 1.0
+	InputMap.action_add_event("use_item", rt)
+	for pair in [["item_next", MOUSE_BUTTON_WHEEL_DOWN], ["item_prev", MOUSE_BUTTON_WHEEL_UP]]:
+		var wheel := InputEventMouseButton.new()
+		wheel.button_index = pair[1]
+		InputMap.action_add_event(pair[0], wheel)
 	# The left trigger also sprints.
 	var lt := InputEventJoypadMotion.new()
 	lt.axis = JOY_AXIS_TRIGGER_LEFT
