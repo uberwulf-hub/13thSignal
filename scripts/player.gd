@@ -34,6 +34,9 @@ const SLOTS := 6
 var inventory: Array = []   # [{"id": String, "count": int}], at most SLOTS
 var selected := 0
 var _hand: Node3D           # holds the selected item's model
+var _torch: Node3D          # the flashlight in your left hand
+var _spill: OmniLight3D
+var body: Node3D            # you, as other people would see you (only in cutscenes)
 var _hand_id := ""
 var frozen := false
 var noise := 0.0           # how loud you are right now (metres the sound carries)
@@ -70,6 +73,7 @@ func _ready() -> void:
 	flashlight.shadow_enabled = Game.gfx() >= 1
 	# The flashlight is in your left hand.
 	var torch := Node3D.new()
+	_torch = torch
 	torch.position = Vector3(-0.45, -0.36, -0.6)
 	torch.rotation = Vector3(0.05, 0.08, 0)
 	cam.add_child(torch)
@@ -97,11 +101,116 @@ func _ready() -> void:
 	spill.light_color = Color(1.0, 0.95, 0.85)
 	spill.position = Vector3(0, -0.2, -0.35)
 	cam.add_child(spill)
+	_spill = spill
+	body = _build_body()
+	body.visible = false
+	add_child(body)
 	ray = RayCast3D.new()
 	ray.target_position = Vector3(0, 0, -2.4)
 	ray.collision_mask = 3
 	ray.exclude_parent = true
 	cam.add_child(ray)
+
+
+## You, from the outside: a kid in a hoodie and jeans with a flashlight.
+## Faceless from behind the hood. Only seen in the elevator cutscene.
+func _build_body() -> Node3D:
+	var root := Node3D.new()
+	var hoodie := Items._m(Color(0.16, 0.2, 0.17), 0.9)
+	var jeans := Items._m(Color(0.12, 0.15, 0.24), 0.85)
+	var shoe := Items._m(Color(0.75, 0.75, 0.72), 0.7)
+	var skin := Items._m(Color(0.78, 0.6, 0.48), 0.6)
+	var dark := Items._m(Color(0.03, 0.03, 0.03), 0.9)
+	for side in [-1.0, 1.0]:
+		root.add_child(_cap(0.085, 0.85, jeans, Vector3(0.1 * side, 0.47, 0)))
+		root.add_child(Items._box(Vector3(0.11, 0.08, 0.26), shoe, Vector3(0.1 * side, 0.04, -0.04)))
+	root.add_child(_cap(0.2, 0.68, hoodie, Vector3(0, 1.17, 0), Vector3(0.75, 1.0, 0.6)))
+	# Arms: the left holds the flashlight, pointing forward and down.
+	var l_arm := Node3D.new()
+	l_arm.position = Vector3(-0.22, 1.4, 0)
+	l_arm.rotation = Vector3(0.9, 0, -0.1)
+	root.add_child(l_arm)
+	l_arm.add_child(_cap(0.06, 0.6, hoodie, Vector3(0, -0.27, 0)))
+	l_arm.add_child(_cap(0.045, 0.1, skin, Vector3(0, -0.58, 0)))
+	var lamp := Items.real_model("small_plastic_torch", Vector3(-PI / 2.0, 0, 0))
+	if lamp:
+		lamp.position = Vector3(0, -0.66, -0.02)
+		l_arm.add_child(lamp)
+	var r_arm := Node3D.new()
+	r_arm.position = Vector3(0.22, 1.4, 0)
+	r_arm.rotation = Vector3(0.15, 0, 0.12)
+	root.add_child(r_arm)
+	r_arm.add_child(_cap(0.06, 0.6, hoodie, Vector3(0, -0.27, 0)))
+	r_arm.add_child(_cap(0.045, 0.1, skin, Vector3(0, -0.58, 0)))
+	# Head in a hood: a face in shadow.
+	var head := MeshInstance3D.new()
+	var hm := SphereMesh.new()
+	hm.radius = 0.11
+	hm.height = 0.25
+	head.mesh = hm
+	head.material_override = skin
+	head.position = Vector3(0, 1.64, -0.02)
+	root.add_child(head)
+	var hood := MeshInstance3D.new()
+	var hd := SphereMesh.new()
+	hd.radius = 0.145
+	hd.height = 0.32
+	hood.mesh = hd
+	hood.material_override = hoodie
+	hood.position = Vector3(0, 1.66, 0.035)
+	hood.scale = Vector3(1.0, 1.0, 0.95)
+	root.add_child(hood)
+	for side in [-1.0, 1.0]:
+		var eye := MeshInstance3D.new()
+		var em := SphereMesh.new()
+		em.radius = 0.013
+		em.height = 0.02
+		eye.mesh = em
+		eye.material_override = dark
+		eye.position = Vector3(0.04 * side, 1.66, -0.12)
+		root.add_child(eye)
+	return root
+
+
+func _cap(r: float, h: float, mat: Material, pos: Vector3, scl := Vector3.ONE) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var cm := CapsuleMesh.new()
+	cm.radius = r
+	cm.height = h
+	mi.mesh = cm
+	mi.material_override = mat
+	mi.position = pos
+	mi.scale = scl
+	return mi
+
+
+## Hide (or bring back) your hands and flashlight, but stay in first person.
+func set_view_only(on: bool) -> void:
+	_torch.visible = not on
+	_hand.visible = not on
+	_spill.visible = not on
+	if on:
+		flashlight.visible = false
+
+
+## Put the camera back at eye height, level, after a catch scene.
+func reset_view() -> void:
+	_eye = 1.6
+	cam.position = Vector3(0, _eye, 0)
+	cam.rotation = Vector3.ZERO
+	cam.h_offset = 0.0
+	cam.v_offset = 0.0
+	flashlight.visible = battery > 1.0
+	_apply_look()
+
+
+## Cutscene: hide your first-person hands and show your body instead.
+func set_cutscene(on: bool) -> void:
+	_torch.visible = not on
+	_hand.visible = not on
+	_spill.visible = not on
+	flashlight.visible = false if on else flashlight.visible
+	body.visible = on
 
 
 func look_at_yaw(y: float) -> void:

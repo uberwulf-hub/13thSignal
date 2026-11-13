@@ -25,9 +25,9 @@ const SECTORS := [
 const MODES := [
 	{
 		"name": "EXPLORER",
-		"blurb": "No jump scares. Slower, gentler monsters that never learn to check lockers. Puzzle-focused.",
+		"blurb": "No jump scares (a parent can turn them on). Gentler monsters that never learn to check lockers - but it still hears you run. Puzzle-focused.",
 		"color": Color(0.45, 0.85, 1.0),
-		"listener_speed": 0.75, "hearing": 0.6,
+		"listener_speed": 0.85, "hearing": 0.8,
 		"learn_hide": 0, "learn_sprint": 45.0,
 		"replacement_hunts": false, "scares": false, "scare_gap": Vector2(70, 120),
 		"battery_drain": 0.6, "breath_drain": 10.0, "ambient": 0.12, "wrong_code_alarm": false,
@@ -85,6 +85,7 @@ var _pin_hash := ""
 # --- This launch only ---
 var mode: int = Mode.EXPLORER        # always starts in Explorer
 var scary_unlocked := false          # the Parent PIN was entered this launch
+var explorer_scares := false         # parent setting: full catch scare in Explorer too
 
 # --- This run: what the monster has learned about you ---
 var hide_count := 0
@@ -96,6 +97,19 @@ var crouch_time := 0.0
 var learned_crouch := false
 
 var theme: Theme
+## Items you carried out of the last sector, for the next one: {"sector": n, "items": [...]}.
+## Kept if you're caught and retry that sector; cleared when you go back to the menu.
+var carried: Dictionary = {}
+
+
+func carry_items(to_sector: int, items: Array) -> void:
+	carried = {"sector": to_sector, "items": items.duplicate(true)}
+
+
+func carried_for(sector_id: int) -> Array:
+	if int(carried.get("sector", -1)) != sector_id:
+		return []
+	return (carried["items"] as Array).duplicate(true)
 
 
 func _ready() -> void:
@@ -270,6 +284,7 @@ func load_settings() -> void:
 	fragments_ever = cfg.get_value("progress", "fragments", {})
 	sector_unlocked = cfg.get_value("progress", "sector_unlocked", 1)
 	_pin_hash = cfg.get_value("parent", "pin_hash", "")
+	explorer_scares = cfg.get_value("parent", "explorer_scares", false)
 	apply_volume()
 
 
@@ -286,6 +301,7 @@ func save_settings() -> void:
 	cfg.set_value("progress", "fragments", fragments_ever)
 	cfg.set_value("progress", "sector_unlocked", sector_unlocked)
 	cfg.set_value("parent", "pin_hash", _pin_hash)
+	cfg.set_value("parent", "explorer_scares", explorer_scares)
 	cfg.save(SAVE_PATH)
 
 
@@ -360,43 +376,109 @@ func _setup_input() -> void:
 
 # --------------------------------------------------------------------- Theme
 
+## The look of every menu, panel and button: worn typewriter text on grimy,
+## stained panels with chipped edges, like old facility paperwork and
+## equipment. Readable, but nothing about it is clean.
+const INK := Color(0.88, 0.84, 0.74)        # yellowed paper white
+const INK_DIM := Color(0.6, 0.57, 0.5)
+const RUST := Color(0.72, 0.18, 0.12)
+
+
 func _make_theme() -> Theme:
 	var t := Theme.new()
-	var font := SystemFont.new()
-	font.font_names = PackedStringArray(["Consolas", "DejaVu Sans Mono", "Liberation Mono", "Courier New", "monospace"])
+	var font: Font
+	if ResourceLoader.exists("res://assets/fonts/SpecialElite-Regular.ttf"):
+		font = load("res://assets/fonts/SpecialElite-Regular.ttf")
+	else:
+		var sf := SystemFont.new()
+		sf.font_names = PackedStringArray(["Courier New", "DejaVu Sans Mono", "monospace"])
+		font = sf
 	t.default_font = font
 	t.default_font_size = 20
-	var normal := _box(Color(0.04, 0.07, 0.1, 0.92), Color(0.2, 0.45, 0.6))
-	var hover := _box(Color(0.07, 0.14, 0.2, 0.95), Color(0.45, 0.85, 1.0))
-	var pressed := _box(Color(0.1, 0.2, 0.28, 1.0), Color(0.7, 0.95, 1.0))
-	var disabled := _box(Color(0.03, 0.04, 0.05, 0.9), Color(0.15, 0.18, 0.2))
+	var normal := _grime_box(Color(0.05, 0.05, 0.045, 0.93), Color(0.5, 0.47, 0.4), 1, 12)
+	var hover := _grime_box(Color(0.12, 0.05, 0.04, 0.95), RUST.lightened(0.15), 2, 12)
+	var pressed := _grime_box(Color(0.2, 0.06, 0.04, 1.0), RUST.lightened(0.35), 3, 12)
+	var disabled := _grime_box(Color(0.03, 0.03, 0.03, 0.85), Color(0.22, 0.21, 0.19), 4, 12)
 	for s in ["normal", "hover", "pressed", "disabled", "focus"]:
-		var box: StyleBoxFlat = normal
+		var box: StyleBox = normal
 		match s:
 			"hover", "focus": box = hover
 			"pressed": box = pressed
 			"disabled": box = disabled
 		t.set_stylebox(s, "Button", box)
-	t.set_color("font_color", "Button", Color(0.8, 0.92, 1.0))
-	t.set_color("font_hover_color", "Button", Color(1, 1, 1))
-	t.set_color("font_focus_color", "Button", Color(1, 1, 1))
-	t.set_color("font_disabled_color", "Button", Color(0.4, 0.45, 0.5))
-	t.set_stylebox("panel", "PanelContainer", _box(Color(0.02, 0.035, 0.05, 0.94), Color(0.2, 0.45, 0.6), 18))
-	t.set_color("font_color", "Label", Color(0.82, 0.92, 1.0))
+	t.set_color("font_color", "Button", INK)
+	t.set_color("font_hover_color", "Button", Color(1.0, 0.9, 0.85))
+	t.set_color("font_focus_color", "Button", Color(1.0, 0.9, 0.85))
+	t.set_color("font_pressed_color", "Button", Color(1.0, 0.8, 0.75))
+	t.set_color("font_disabled_color", "Button", Color(0.38, 0.36, 0.32))
+	t.set_stylebox("panel", "PanelContainer", _grime_box(Color(0.035, 0.035, 0.03, 0.95), Color(0.45, 0.42, 0.36), 5, 18))
+	t.set_color("font_color", "Label", INK)
+	t.set_color("font_shadow_color", "Label", Color(0, 0, 0, 0.8))
+	t.set_constant("shadow_offset_x", "Label", 1)
+	t.set_constant("shadow_offset_y", "Label", 2)
+	# Scroll bars: a thin dirty strip.
+	var grab := StyleBoxFlat.new()
+	grab.bg_color = Color(0.5, 0.46, 0.38, 0.6)
+	grab.set_content_margin_all(3)
+	var track := StyleBoxFlat.new()
+	track.bg_color = Color(0.1, 0.1, 0.09, 0.5)
+	track.set_content_margin_all(3)
+	for sb in ["VScrollBar", "HScrollBar"]:
+		t.set_stylebox("grabber", sb, grab)
+		t.set_stylebox("grabber_highlight", sb, grab)
+		t.set_stylebox("grabber_pressed", sb, grab)
+		t.set_stylebox("scroll", sb, track)
 	return t
 
 
-func _box(bg: Color, border: Color, margin := 12) -> StyleBoxFlat:
-	var b := StyleBoxFlat.new()
-	b.bg_color = bg
-	b.border_color = border
-	b.set_border_width_all(2)
-	b.set_corner_radius_all(4)
-	b.content_margin_left = margin + 6
-	b.content_margin_right = margin + 6
-	b.content_margin_top = margin
-	b.content_margin_bottom = margin
-	return b
+## A grimy panel texture made in code: stained, speckled dark metal with a
+## chipped, uneven painted edge. `seed_n` makes each kind look a bit different.
+func _grime_box(bg: Color, edge: Color, seed_n: int, margin := 12) -> StyleBoxTexture:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1313 + seed_n
+	var n := 96
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	# Stains: a few soft dark and rust-brown blotches.
+	var stains: Array = []
+	for k in 5:
+		stains.append([Vector2(rng.randf() * n, rng.randf() * n), rng.randf_range(8.0, 26.0), rng.randf_range(0.2, 0.5)])
+	for y in n:
+		for x in n:
+			var c := bg
+			var v := rng.randf_range(-0.025, 0.025)
+			c = Color(c.r + v, c.g + v * 0.9, c.b + v * 0.7, c.a)
+			for st in stains:
+				var d: float = Vector2(x, y).distance_to(st[0])
+				if d < st[1]:
+					var f: float = (1.0 - d / st[1]) * st[2]
+					c = c.lerp(Color(0.09, 0.05, 0.03, c.a), f * 0.5)
+			# The painted edge: rough, chipped, thicker along the bottom.
+			var inset := mini(mini(x, y), mini(n - 1 - x, n - 1 - y))
+			var thick := 2 + (1 if y > n - 4 else 0)
+			if inset < thick and rng.randf() > 0.12:
+				c = edge * rng.randf_range(0.65, 1.1)
+				c.a = rng.randf_range(0.65, 1.0)
+			elif inset == thick and rng.randf() < 0.25:
+				c = c.lerp(edge, 0.35)
+			img.set_pixel(x, y, c)
+	# Scratches: a few thin light lines.
+	for k in 4:
+		var p := Vector2(rng.randf() * n, rng.randf() * n)
+		var dir := Vector2.from_angle(rng.randf() * TAU)
+		for step in rng.randi_range(8, 22):
+			var q := p + dir * step
+			if q.x > 4 and q.y > 4 and q.x < n - 4 and q.y < n - 4:
+				img.set_pixelv(Vector2i(q), img.get_pixelv(Vector2i(q)).lerp(edge, 0.3))
+	var sb := StyleBoxTexture.new()
+	sb.texture = ImageTexture.create_from_image(img)
+	sb.set_texture_margin_all(8)
+	sb.axis_stretch_horizontal = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT
+	sb.axis_stretch_vertical = StyleBoxTexture.AXIS_STRETCH_MODE_TILE_FIT
+	sb.content_margin_left = margin + 6
+	sb.content_margin_right = margin + 6
+	sb.content_margin_top = margin
+	sb.content_margin_bottom = margin
+	return sb
 
 
 ## A full-screen static/noise shader, used on the menu and when you're caught.
@@ -417,3 +499,9 @@ void fragment() {
 	m.shader = sh
 	m.set_shader_parameter("amount", amount)
 	return m
+
+
+## The full jump-scare version of being caught? Always in Survivor and
+## Nightmare; in Explorer only if a parent has switched it on.
+func full_scares() -> bool:
+	return not is_explorer() or explorer_scares

@@ -33,6 +33,12 @@
       "author": "Poly Haven (polyhaven.com) artists",
       "license": "CC0 1.0",
       "source": "https://polyhaven.com/license"
+    },
+    {
+      "asset": "Special Elite font (menus and on-screen text)",
+      "author": "Astigmatic",
+      "license": "Apache 2.0",
+      "source": "https://fonts.google.com/specimen/Special+Elite"
     }
   ]
 }

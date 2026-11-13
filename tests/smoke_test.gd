@@ -52,8 +52,11 @@ func _ready() -> void:
 	s.listener.reset_to(s.player.global_position + Vector3(0.5, 0, 0))
 	await wait(0.3)
 	check(s.catching and s.catches == 1, "the Listener catches you when it reaches you")
-	await wait(4.0)
+	await wait(1.2)
+	check(s.player.cam.position.y < 0.8 and s.listener.posed, "...you fall backwards and it bends down over you")
+	await wait(5.0)
 	check(not s.catching and not s.player.frozen, "you respawn at the checkpoint")
+	check(absf(s.player.cam.position.y - 1.6) < 0.05 and not s.listener.posed, "...standing up again, and it's back to normal")
 	s._on_code("0000" if s.exit_code != "0000" else "1111")
 	check(not s.exit_open, "a wrong code keeps the elevator shut")
 	s._on_code(s.exit_code)
@@ -92,7 +95,7 @@ func _ready() -> void:
 	s.listener._wait = 0.01
 	await wait(4.5)
 	check(s.catches == 1, "breathing in a checked locker gets you caught")
-	await wait(4.0)
+	await wait(6.5)
 	Game.sprint_cells = {Vector2i(2, 7): 5.0, Vector2i(12, 7): 4.0, Vector2i(24, 7): 3.0, Vector2i(15, 16): 2.0}
 	s.player.global_position = s.cell_to_world(Vector2i(3, 2))
 	Game.sprint_time = 100.0
@@ -702,6 +705,40 @@ func _ready() -> void:
 	tc._buttons["crouch"].pressed.emit()
 	check(not Input.is_action_pressed("crouch"), "...and off again")
 	Game.touch_mode = 0
+	s.queue_free()
+	await wait(0.3)
+
+	# --- The elevator: cutscene, carried items, and the Listener's alert ---
+	Game.mode = Game.Mode.EXPLORER
+	Game.carried = {}
+	s = load("res://scenes/sector.tscn").instantiate()
+	add_child(s)
+	await wait(1.2)
+	s.listener.set_physics_process(true)
+	s.listener.reset_to(s.cell_to_world(Vector2i(8, 8)))
+	s.listener._alert_cool = 0.0
+	s.listener.hear(s.listener.global_position + Vector3(4, 0, 0), 12.0, true)
+	check(s.listener._alert_t > 0.0 and s.listener._rush_t > 0.0, "running near the Listener makes it rear up, screech and rush the sound")
+	s.listener.set_physics_process(false)
+	s.player.inventory.clear()
+	s.player.add_item("wrench")
+	s.player.add_item("battery")
+	s._on_code(s.exit_code)
+	await wait(0.3)
+	check(s.exit_door.is_open, "the elevator doors slide open")
+	s.player.global_position = s.cell_to_world(Vector2i(25, 16))
+	await wait(1.0)
+	check(s.ended and s.player.body.visible, "stepping in starts the cutscene: you see yourself in the elevator")
+	await wait(13.0)
+	check(not s.exit_door.is_open, "...the doors close behind you")
+	check(s.hud.end_shown, "...then the screen fades to the sector-clear panel")
+	check(Game.carried_for(2).size() == 2, "your items are carried to the next sector")
+	s.queue_free()
+	await wait(0.3)
+	s = load("res://scenes/sector_2.tscn").instantiate()
+	add_child(s)
+	await wait(1.0)
+	check(s.player.inventory.size() == 2 and s.player.selected_id() == "wrench", "...and you start Sector 2 with them in your inventory")
 	s.queue_free()
 	await wait(0.3)
 

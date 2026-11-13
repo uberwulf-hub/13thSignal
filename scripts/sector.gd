@@ -176,6 +176,13 @@ func _ready() -> void:
 	add_child(hud)
 	_spawn_actors()
 	_spawn_loot()
+	# Whatever you carried out of the last sector comes with you.
+	var carried: Array = Game.carried_for(sector_id)
+	if not carried.is_empty():
+		player.inventory = carried
+		player.selected = 0
+		player._hand_id = "-"
+		player._inventory_changed()
 	if Game.use_touch():
 		add_child(TouchControls.new().setup(self))
 	hud.set_fragments(0, fragment_total)
@@ -481,6 +488,7 @@ func _build_level() -> void:
 				_:
 					_custom_cell(k, cell)
 	_build_rooms(stripe_mat)
+	_dress_elevator()
 
 
 func _shape(body: StaticBody3D, size: Vector3, pos: Vector3) -> void:
@@ -499,13 +507,20 @@ func _build_rooms(stripe_mat: Material) -> void:
 		var rect: Rect2i = room[1]
 		var center := Vector3((rect.position.x + (rect.size.x - 1) / 2.0) * S, 0, (rect.position.y + (rect.size.y - 1) / 2.0) * S)
 		# The room's name stencilled on the floor.
-		if room_name != "CRAWLSPACE":
+		if room_name != "CRAWLSPACE" and room_name != "ELEVATOR":
 			var l := Label3D.new()
 			l.text = room_name if room_name != "MAIN HALL" else sector_title
+			# Stencilled along the room's long side, and small enough that the
+			# whole name fits (narrow halls and shafts got cut off before).
 			l.font_size = 96
-			l.pixel_size = 0.008
-			l.modulate = Color(0.75, 0.8, 0.85, 0.35)
-			l.rotation.x = -PI / 2.0
+			l.outline_size = 0
+			var along_z := rect.size.y > rect.size.x
+			var long_m := float(maxi(rect.size.x, rect.size.y)) * S * 0.8
+			var short_m := float(mini(rect.size.x, rect.size.y)) * S * 0.6
+			var text_w := float(l.text.length()) * 96.0 * 0.62   # rough width in font pixels
+			l.pixel_size = minf(0.008, minf(long_m / text_w, short_m / 96.0))
+			l.modulate = Color(0.85, 0.88, 0.9, 0.55)
+			l.rotation = Vector3(-PI / 2.0, PI / 2.0 if along_z else 0.0, 0)
 			l.position = center + Vector3(0, 0.03, 0)
 			add_child(l)
 		# Ceiling lights.
@@ -720,9 +735,105 @@ func _spawn_digit(cell: Vector2i, spot: int) -> void:
 	digit_spots.append({"pos": p + n * 0.1, "color": color_index, "room": room_at(cell), "found": false})
 
 
-func _spawn_exit(cell: Vector2i) -> void:
-	var wp := wall_point(cell, 2.2)
-	_label("EXIT", wp[0], wp[1], 120, Color(1.0, 0.9, 0.3), 0.006)
+func _spawn_exit(_cell: Vector2i) -> void:
+	pass   # the elevator's sign is over its doors now
+
+
+func room_rect(room_name: String) -> Rect2i:
+	for r in rooms:
+		if r[0] == room_name:
+			return r[1]
+	return Rect2i()
+
+
+## Make the ELEVATOR room look like the inside of an old service elevator:
+## brushed-steel wall panels with handrails, a scuffed metal floor, a low
+## ceiling with one buzzing halogen panel, and a button panel. One of the
+## buttons says 13. It's lit.
+func _dress_elevator() -> void:
+	var rect := room_rect("ELEVATOR")
+	if rect.size == Vector2i.ZERO:
+		return
+	const CAB_H := 2.6
+	var steel := StandardMaterial3D.new()
+	steel.albedo_color = Color(0.5, 0.52, 0.53)
+	steel.metallic = 0.85
+	steel.roughness = 0.38
+	steel.anisotropy_enabled = true
+	steel.anisotropy = 0.5
+	var seam_mat := _mat(Color(0.08, 0.08, 0.09), 0.6, 0.5)
+	var rail_mat := _mat(Color(0.7, 0.7, 0.68), 0.25, 1.0)
+	var floor_mat: StandardMaterial3D = Game.tex_mat("metal", 0.6, Color(0.42, 0.42, 0.4), 0.7)
+	if floor_mat == null:
+		floor_mat = _mat(Color(0.25, 0.25, 0.26), 0.6, 0.7)
+	var lo := cell_to_world(rect.position) - Vector3(S / 2.0, 0, S / 2.0)
+	var size := Vector3(rect.size.x * S, 0, rect.size.y * S)
+	var mid := lo + size / 2.0
+	_box(Vector3(size.x, 0.03, size.z), mid + Vector3(0, 0.015, 0), floor_mat)
+	_box(Vector3(size.x, 0.06, size.z), mid + Vector3(0, CAB_H + 0.03, 0), _mat(Color(0.14, 0.14, 0.15), 0.7, 0.4))
+	var panel_done := false
+	for y in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x):
+			var cell := Vector2i(x, y)
+			for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+				if ch(cell + d) != "#":
+					continue
+				var out := Vector3(d.x, 0, d.y)
+				var face := cell_to_world(cell) + out * (S / 2.0 - 0.03)
+				var along := Vector3(absf(out.z), 0, absf(out.x))   # direction along the wall
+				var thick := Vector3(absf(out.x), 0, absf(out.z)) * 0.04
+				_box(along * S + thick + Vector3(0, CAB_H, 0), face + Vector3(0, CAB_H / 2.0, 0), steel)
+				for k in [-1, 1]:   # seams between the panels
+					_box(along * 0.02 + thick * 1.3 + Vector3(0, CAB_H, 0), face + along * (S / 6.0) * k + Vector3(0, CAB_H / 2.0, 0), seam_mat)
+				_box(along * S + thick * 2.0 + Vector3(0, 0.12, 0), face - out * 0.02 + Vector3(0, 0.06, 0), seam_mat)   # kick strip
+				# Handrail on stand-offs.
+				_box(along * (S - 0.3) + Vector3(0, 0.045, 0) + thick * 1.1, face - out * 0.09 + Vector3(0, 0.95, 0), rail_mat)
+				for k in [-1, 1]:
+					_box(Vector3(0.03, 0.03, 0.03) + thick * 2.0, face - out * 0.05 + along * (S / 2.0 - 0.3) * k + Vector3(0, 0.95, 0), rail_mat)
+				if not panel_done:
+					panel_done = true
+					_elevator_buttons(face - out * 0.03, out, along)
+	# A soft fill low in the cab, so you can see who's standing in it.
+	var fill := OmniLight3D.new()
+	fill.light_color = Color(1.0, 0.85, 0.65)
+	fill.light_energy = 0.7
+	fill.omni_range = 4.5
+	fill.position = mid + Vector3(0, 1.3, 0)
+	add_child(fill)
+	var fill_fx := MeshInstance3D.new()   # no visible fixture: it's a glow, not a lamp
+	add_child(fill_fx)
+	lights.append({"light": fill, "fixture": fill_fx, "flicker": false, "mult": 1.0, "room": "ELEVATOR"})
+	if exit_door:
+		var into: Vector3 = mid - exit_door.global_position
+		exit_door.set_hall_side(-1.0 if into.dot(exit_door.global_transform.basis.z) > 0.0 else 1.0)
+	# The halogen panel: move the room's lights under the low ceiling.
+	for l in lights:
+		if l["room"] != "ELEVATOR":
+			continue
+		var light: OmniLight3D = l["light"]
+		light.position.y = CAB_H - 0.25
+		light.light_color = Color(1.0, 0.9, 0.72)
+		light.light_energy = 1.8
+		light.omni_range = 7.0
+		var fx: MeshInstance3D = l["fixture"]
+		fx.position.y = CAB_H - 0.02
+		fx.material_override = _glow(Color(1.0, 0.92, 0.75), 2.2)
+		fx.scale = Vector3(1.0, 0.5, 2.0)
+		l["flicker"] = true
+
+
+func _elevator_buttons(face: Vector3, out: Vector3, along: Vector3) -> void:
+	var base := face + along * (S / 2.0 - 0.45) + Vector3(0, 1.35, 0)
+	var plate := _box(along * 0.28 + Vector3(0, 0.62, 0) + Vector3(absf(out.x), 0, absf(out.z)) * 0.02, base, _mat(Color(0.3, 0.3, 0.31), 0.3, 0.9))
+	plate.name = "ButtonPlate"
+	var labels := ["6", "5", "4", "3", "2", "1", "13"]
+	for i in labels.size():
+		var lit: bool = labels[i] == "13"
+		var p := base + Vector3(0, 0.24 - i * 0.075, 0) - out * 0.015
+		_box(Vector3(0.05, 0.05, 0.05) * (along + Vector3(0, 1, 0)) + Vector3(absf(out.x), 0, absf(out.z)) * 0.02, p,
+			_glow(Color(1.0, 0.2, 0.1), 2.0) if lit else _mat(Color(0.75, 0.75, 0.72), 0.4, 0.6))
+		var l := _label(labels[i], p + along * 0.07 - out * 0.005, -out, 28, Color(1.0, 0.3, 0.2) if lit else Color(0.8, 0.8, 0.8), 0.0025)
+		l.modulate.a = 1.0
 
 
 func _make_code() -> void:
@@ -1380,6 +1491,11 @@ func on_caught(by: String) -> void:
 	player.frozen = true
 	paused_world = true
 	var soft := Game.is_explorer()
+	if by == "listener" and listener:
+		var lt := ("IT FOUND YOU.\nBack to the last checkpoint.\n\nTip: crouch to stay quiet, and avoid the metal grates. Running makes it come FAST."
+			if soft else "SIGNAL LOST\n\nTip: crouch to stay quiet, and avoid the metal grates. Running makes it come FAST.")
+		_listener_catch(Game.full_scares(), lt)
+		return
 	Sound.play("static", -12.0 if soft else -2.0)
 	var tips := {
 		"listener": "Tip: crouch to stay quiet, and avoid the metal grates.",
@@ -1391,7 +1507,75 @@ func on_caught(by: String) -> void:
 	hud.show_caught(soft, text, _respawn)
 
 
+## Caught by the Listener. Full version: you spin to face it and its eyeless
+## head is suddenly RIGHT in your face with a shriek; you fall backwards onto
+## the floor and it bends down over you, face to face, ears flaring. Gentle
+## version (Explorer, unless a parent turns it on): no shriek and no sudden
+## face - you stumble back and fall, and it slowly leans down over you.
+func _listener_catch(full: bool, text: String) -> void:
+	var cam: Camera3D = player.cam
+	var p: Vector3 = player.global_position
+	var to: Vector3 = listener.global_position - p
+	to.y = 0.0
+	if to.length() < 0.05:
+		to = -player.global_transform.basis.z
+	to = to.normalized()
+	player.yaw = atan2(-to.x, -to.z)
+	player.rotation.y = player.yaw
+	player.pitch = 0.0
+	cam.rotation = Vector3.ZERO
+	player.set_view_only(true)
+	player.flashlight.visible = true   # you swing your light up at it
+	hud.cinematic(true)
+	listener.rotation.y = atan2(-to.x, -to.z)   # facing you
+	if full:
+		# Its head drops to yours: it bends right over at the waist.
+		listener.global_position = Vector3(p.x, listener.global_position.y, p.z) + to * 2.15
+		listener.pose(1.3, -0.1, 0.06)
+		Sound.play("jumpscare", 0.0)
+		hud.jump_flash()
+		var t0 := 0.0
+		while t0 < 0.55:
+			cam.h_offset = randf_range(-0.04, 0.04)
+			cam.v_offset = randf_range(-0.04, 0.04)
+			await get_tree().process_frame
+			if not is_inside_tree():
+				return
+			t0 += get_process_delta_time()
+		cam.h_offset = 0.0
+		cam.v_offset = 0.0
+	else:
+		Sound.play_at("listener_snap", listener.global_position + Vector3(0, 2.0, 0), -6.0, 0.8)
+	# You fall backwards. It stands over you and bends down, face to face.
+	Sound.play("body_fall", -3.0 if full else -8.0)
+	var fall := create_tween().set_parallel(true)
+	fall.tween_property(cam, "position", Vector3(0, 0.3, 0.35), 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	fall.tween_property(cam, "rotation", Vector3(1.2, 0, 0.22), 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	listener.global_position = Vector3(p.x, listener.global_position.y, p.z) + to * 0.75
+	listener.pose(0.95, 1.1, 0.5 if full else 2.2)
+	if not full:
+		Sound.play("listener_loom", -10.0)
+	await get_tree().create_timer(0.5).timeout
+	if not is_inside_tree():
+		return
+	var hold := 1.7 if full else 1.4
+	var t := 0.0
+	while t < hold:
+		if randf() < (0.35 if full else 0.12):
+			listener.pose_twitch()
+			if full and randf() < 0.3:
+				Sound.play_at("listener_click", listener.global_position + Vector3(0, 1.8, 0), 0.0, randf_range(0.8, 1.2))
+		await get_tree().create_timer(0.08).timeout
+		if not is_inside_tree():
+			return
+		t += 0.08
+	hud.show_caught(not full, text, _respawn)
+
+
 func _respawn() -> void:
+	hud.cinematic(false)
+	player.set_view_only(false)
+	player.reset_view()
 	player.global_position = checkpoint
 	player.look_at_yaw(checkpoint_yaw)
 	player.velocity = Vector3.ZERO
@@ -1608,4 +1792,92 @@ func _win() -> void:
 		mode_name, int(run_time) / 60, int(run_time) % 60, "  (new best!)" if new_best else "",
 		catches, fragments, fragment_total, learned_text, _end_story()]
 	var next := next_scene if ResourceLoader.exists(next_scene) else ""
-	hud.fade_out(1.5, func(): hud.show_end("SECTOR %d CLEAR" % sector_id, body, next))
+	Game.carry_items(sector_id + 1, player.inventory)
+	_elevator_cutscene(func(): hud.show_end("SECTOR %d CLEAR" % sector_id, body, next))
+
+
+## The end of a sector, as a short cutscene. The camera pulls slowly back out
+## of your head until you can see yourself standing in the elevator, facing
+## out. The doors slide shut. The halogen light buzzes and stutters. Black.
+func _elevator_cutscene(done: Callable) -> void:
+	var rect := room_rect("ELEVATOR")
+	if exit_door == null or rect.size == Vector2i.ZERO:
+		hud.fade_out(1.5, done)
+		return
+	hud.cinematic(true)
+	var lo := cell_to_world(rect.position) - Vector3(S / 2.0, 0, S / 2.0)
+	var center := lo + Vector3(rect.size.x * S, 0, rect.size.y * S) / 2.0
+	var door_pos: Vector3 = exit_door.global_position
+	var out_dir := door_pos - center
+	out_dir.y = 0.0
+	out_dir = out_dir.normalized()
+	# Where you end up standing: in the middle of the cab, turned to face out.
+	var stand := center + out_dir * 0.2
+	stand.y = player.global_position.y
+	var cam := Camera3D.new()
+	cam.fov = player.cam.fov
+	cam.near = 0.05
+	add_child(cam)
+	cam.global_transform = player.cam.global_transform
+	cam.current = true
+	player.set_cutscene(true)
+	player.body.visible = false
+	var from_xf: Transform3D = cam.global_transform
+	var face_out := atan2(-out_dir.x, -out_dir.z)
+	var from_pos: Vector3 = player.global_position
+	var from_yaw: float = player.rotation.y
+	var shot := door_pos + out_dir * 2.6 + Vector3(0, 1.6, 0) + out_dir.cross(Vector3.UP) * 0.35
+	var target := stand + Vector3(0, 1.25, 0)
+	var to_xf := Transform3D(Basis.looking_at(target - shot, Vector3.UP), shot)
+	var hum := Sound.play_at("halogen_buzz", center + Vector3(0, 2.4, 0), -14.0)
+	var pull := func(t: float) -> void:
+		var e := t * t * (3.0 - 2.0 * t)
+		player.global_position = from_pos.lerp(stand, minf(t * 1.6, 1.0))
+		player.rotation.y = lerp_angle(from_yaw, face_out, minf(t * 1.4, 1.0))
+		player.body.visible = t > 0.12
+		cam.global_transform = from_xf.interpolate_with(to_xf, e)
+	var tw := create_tween()
+	tw.tween_method(pull, 0.0, 1.0, 4.2)
+	await tw.finished
+	if not is_inside_tree():
+		return
+	await get_tree().create_timer(0.5).timeout
+	if not is_inside_tree():
+		return
+	exit_door.close_elevator(3.2)
+	# The lights inside start to fail as the doors close.
+	var cab_lights: Array = []
+	for l in lights:
+		if l["room"] == "ELEVATOR":
+			l["flicker"] = false
+			cab_lights.append(l)
+	var t := 0.0
+	var faded := false
+	while t < 5.0:
+		var gap := randf_range(0.04, 0.22)
+		var on := randf() > 0.45
+		for l in cab_lights:
+			l["light"].visible = on
+			l["fixture"].visible = on
+		Sound.play_at("halogen_flick", center + Vector3(0, 2.4, 0), -10.0 if on else -14.0, randf_range(0.9, 1.15))
+		if is_instance_valid(hum):
+			hum.volume_db = -10.0 if on else -24.0
+		cam.global_position += out_dir * 0.012   # a slow drift back
+		await get_tree().create_timer(gap).timeout
+		if not is_inside_tree():
+			return
+		t += gap
+		if t > 2.4 and not faded:
+			faded = true
+			hud.fade_out(2.4, func(): pass)
+	for l in cab_lights:
+		l["light"].visible = false
+		l["fixture"].visible = false
+	if is_instance_valid(hum):
+		hum.stop()
+	Sound.play("elevator_drop", -6.0)
+	await get_tree().create_timer(0.8).timeout
+	if not is_inside_tree():
+		return
+	hud.cinematic(false)
+	done.call()

@@ -42,6 +42,11 @@ var _lunge_on := 0.0
 var _stare := 0.0          # how long you've been looking at it
 var _glitch_cool := 0.0
 var _time := 0.0
+var _alert_t := 0.0        # rearing up and screeching: it just heard you run
+var _alert_cool := 0.0
+var _rush_t := 0.0         # ...then it comes for the sound, fast
+var posed := false         # a catch scene is posing it; don't animate
+var _face_light: OmniLight3D
 
 
 func setup(s: Node) -> void:
@@ -139,6 +144,13 @@ func _build_body() -> void:
 			_slit(Vector3(0.15 * side, 0.3 + j * 0.08, 0.06 + j * 0.02), Vector3(0.012, 0.05, 0.06))
 	for j in 3:                    # and where a face should be
 		_slit(Vector3(0, 0.3 + j * 0.09, 0.22 + j * 0.02), Vector3(0.09 - j * 0.02, 0.012, 0.02))
+	# The slits' own glow on its skull (only up close, when it's caught you).
+	_face_light = OmniLight3D.new()
+	_face_light.light_color = ear_color
+	_face_light.light_energy = 0.0
+	_face_light.omni_range = 1.6
+	_face_light.position = Vector3(0, 0.4, 0.45)
+	_head.add_child(_face_light)
 
 	# Arms on shoulder pivots, with long fingers.
 	for side in [-1.0, 1.0]:
@@ -203,6 +215,8 @@ func _slit(pos: Vector3, size: Vector3) -> void:
 
 ## Arms, legs, hunch and the twitchy head. Runs every frame.
 func _animate(delta: float, moving: bool, speed: float) -> void:
+	if posed:
+		return
 	var hunting := state == State.HUNT
 	var listening := state == State.LISTEN or state == State.CHECK_LOCKER
 	_stride += delta * speed * 2.6 if moving else 0.0
@@ -233,6 +247,9 @@ func _animate(delta: float, moving: bool, speed: float) -> void:
 
 func reset_to(pos: Vector3) -> void:
 	global_position = pos
+	unpose()
+	_alert_t = 0.0
+	_rush_t = 0.0
 	state = State.WANDER
 	path.clear()
 	_wait = 3.0
@@ -249,6 +266,15 @@ func hear(pos: Vector3, radius: float, from_player: bool) -> void:
 	last_heard = pos
 	if state == State.CHECK_LOCKER and not from_player:
 		return
+	# Something LOUD from you (running, a slammed door): it stops dead, rears
+	# up and screeches, then comes for the sound much faster than it walks.
+	if from_player and radius >= 9.0 and _alert_cool <= 0.0 and state != State.HUNT and not sector.player.hidden_in:
+		_alert_cool = 12.0
+		_alert_t = 0.9
+		_rush_t = 6.0
+		Sound.play_at("listener_chatter" if Game.is_explorer() else "listener_alert", global_position + Vector3(0, 2.4, 0), -2.0, randf_range(0.92, 1.05))
+		_ear_mat.emission_energy_multiplier = 6.0
+		_face(pos, 1.0)
 	if from_player and d < 8.0 and not sector.player.hidden_in:
 		if state != State.HUNT:
 			sector.on_hunt_started()
@@ -271,6 +297,29 @@ func _physics_process(delta: float) -> void:
 	var m := Game.mode_data()
 	var mult := float(m["listener_speed"])
 	var player: Node = sector.player
+
+	_alert_cool = maxf(_alert_cool - delta, 0.0)
+	_rush_t = maxf(_rush_t - delta, 0.0)
+	if _alert_t > 0.0:
+		# Reared back, arms out, head snapping about: listening hard.
+		_alert_t -= delta
+		_torso.rotation.x = lerpf(_torso.rotation.x, -0.35, minf(delta * 12.0, 1.0))
+		_head.rotation = Vector3(randf_range(-0.5, 0.2), randf_range(-0.8, 0.8), randf_range(-0.6, 0.6)) if randf() < 0.25 else _head.rotation
+		for arm in _arms:
+			(arm as Node3D).rotation.x = lerpf((arm as Node3D).rotation.x, -0.9, minf(delta * 10.0, 1.0))
+		_ear_mat.emission_energy_multiplier = 3.0 + randf() * 3.0
+		if _alert_t <= 0.0:
+			_go_to(last_heard)
+			if global_position.distance_to(player.global_position) < 14.0:
+				if state != State.HUNT:
+					sector.on_hunt_started()
+				state = State.HUNT
+				_hunt_t = 3.5
+			else:
+				state = State.INVESTIGATE
+		return
+	if _rush_t > 0.0:
+		mult *= 1.35
 
 	_unpredictable(delta, m, player)
 	_stare_glitch(delta, m, player)
@@ -442,14 +491,68 @@ func glitch_jump(bias: int, player: Node) -> void:
 				best = p
 	if best == Vector3.INF:
 		return
-	Sound.play_at("static", global_position + Vector3(0, 1.5, 0), -4.0, 1.8)
+	Sound.play_at("listener_snap", global_position + Vector3(0, 1.8, 0), -2.0, randf_range(0.9, 1.1))
+	_afterimages()
 	visible = false
 	global_position = Vector3(best.x, global_position.y, best.z)
 	path.clear()
 	_repath_t = 0.0
-	Sound.play_at("static", global_position + Vector3(0, 1.5, 0), -4.0, 1.4)
+	Sound.play_at("listener_snap", global_position + Vector3(0, 1.8, 0), -4.0, randf_range(0.8, 0.95))
 	sector.hud.glitch_flash(0.25 if bias < 0 else 0.4)
 	get_tree().create_timer(0.12).timeout.connect(func(): visible = true)
+
+
+## Where it was, it leaves itself behind for a moment: three black, smeared
+## shapes of its body, each one a little further along, fading out.
+func _afterimages() -> void:
+	var smear := StandardMaterial3D.new()
+	smear.albedo_color = Color(0.0, 0.0, 0.0, 0.7)
+	smear.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	smear.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	for k in 3:
+		var ghost: Node3D = _body.duplicate()
+		for c in ghost.find_children("*", "CPUParticles3D", true, false):
+			c.queue_free()
+		var mat: StandardMaterial3D = smear.duplicate()
+		for mi in ghost.find_children("*", "MeshInstance3D", true, false):
+			(mi as MeshInstance3D).material_override = mat
+		sector.add_child(ghost)
+		ghost.global_transform = _body.global_transform
+		ghost.global_position += Vector3(randf_range(-0.25, 0.25), 0, randf_range(-0.25, 0.25)) * (k + 1)
+		ghost.scale = Vector3(1.0 + 0.06 * k, 1.0 - 0.04 * k, 1.0)
+		var tw := ghost.create_tween()
+		tw.tween_interval(0.05 * k)
+		tw.tween_property(mat, "albedo_color:a", 0.0, 0.5 + 0.25 * k)
+		tw.tween_callback(ghost.queue_free)
+
+
+## Catch scenes: bend it over so its head is where the camera needs it.
+## lean: how far its body tips forward; nod: how far its head tips down.
+func pose(lean: float, nod: float, secs: float) -> void:
+	posed = true
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(_torso, "rotation:x", lean, secs).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(_head, "rotation", Vector3(nod, 0, randf_range(-0.3, 0.3)), secs).set_trans(Tween.TRANS_SINE)
+	for arm in _arms:
+		tw.tween_property(arm, "rotation:x", -1.3, secs)
+	_ear_mat.emission_energy_multiplier = 6.0
+	_face_light.light_energy = 3.0
+
+
+## While it's over you: small, sharp twitches of the head, ears flaring.
+func pose_twitch() -> void:
+	_head.rotation += Vector3(randf_range(-0.12, 0.12), randf_range(-0.25, 0.25), randf_range(-0.35, 0.35))
+	_head.rotation.x = clampf(_head.rotation.x, 0.4, 1.3)
+	_ear_mat.emission_energy_multiplier = randf_range(3.0, 7.0)
+
+
+func unpose() -> void:
+	posed = false
+	if _face_light:
+		_face_light.light_energy = 0.0
+	if _torso:
+		_torso.rotation = Vector3.ZERO
+		_head.rotation = Vector3.ZERO
 
 
 ## Nothing solid between it and you (it can't sense you through a wall).

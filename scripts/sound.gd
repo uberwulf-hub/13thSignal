@@ -74,11 +74,11 @@ func play(sound_name: String, vol_db := 0.0, pitch := 1.0, world := false) -> vo
 
 
 ## A sound that comes from a place in the world (it gets quieter far away).
-func play_at(sound_name: String, pos: Vector3, vol_db := 0.0, pitch := 1.0) -> void:
+func play_at(sound_name: String, pos: Vector3, vol_db := 0.0, pitch := 1.0) -> AudioStreamPlayer3D:
 	var s: AudioStream = pick(sound_name)
 	var scene := get_tree().current_scene
 	if s == null or scene == null:
-		return
+		return null
 	var p := AudioStreamPlayer3D.new()
 	p.stream = s
 	p.volume_db = vol_db
@@ -92,6 +92,7 @@ func play_at(sound_name: String, pos: Vector3, vol_db := 0.0, pitch := 1.0) -> v
 	p.global_position = pos
 	p.finished.connect(p.queue_free)
 	p.play()
+	return p
 
 
 func start_ambient(vol_db := -10.0) -> void:
@@ -333,6 +334,20 @@ func _generate() -> void:
 	_set_variants("surf_glass", 4, func(): return _strike(0.8, 0.002, 0.8, [[148.0, 14.0, 0.7], [1270.0, 16.0, 1.0], [2930.0, 22.0, 0.6], [4610.0, 32.0, 0.35]], 0.25))
 	_set_variants("surf_mannequin", 4, func(): return _surf_mannequin())
 	_set_variants("mq_hit_reaction", 3, func(): return _mq_hit_reaction())
+	# The elevator: an old, cracked chime; heavy doors grinding along their
+	# track; a halogen tube buzzing at mains frequency, and its crackle as it fails.
+	_streams["elevator_ding"] = _wav(_strike(2.2, 0.002, 0.8, [[1046.0, 2.2, 1.0], [2093.0, 3.0, 0.35], [2711.0, 5.0, 0.25], [1052.0, 2.5, 0.6]], 0.05))
+	_streams["elevator_doors"] = _wav(_elevator_doors())
+	_streams["halogen_buzz"] = _wav(_halogen_buzz(), true)
+	_set_variants("halogen_flick", 5, func(): return _halogen_flick())
+	_streams["elevator_drop"] = _wav(_elevator_drop())
+	# The Listener, up close.
+	_streams["jumpscare"] = _wav(_jumpscare())
+	_set_variants("listener_alert", 3, func(): return _listener_alert(true))
+	_set_variants("listener_chatter", 3, func(): return _listener_alert(false))
+	_set_variants("listener_snap", 4, func(): return _listener_snap())
+	_streams["body_fall"] = _wav(_body_fall())
+	_streams["listener_loom"] = _wav(_listener_loom())
 
 	# A signal fragment's hum: low tones a little out of tune with each other,
 	# beating slowly, with a faint high shimmer. Loops every 4 s.
@@ -671,6 +686,190 @@ func _mq_hit_reaction() -> PackedFloat32Array:
 		lp2 += 0.03 * (lp - lp2)
 		out[i] += (lp - lp2) * sin(PI * k) * 0.22
 	return _normalize(out, 0.6)
+
+
+## Elevator doors sliding shut: a low motor whine, the rumble of rollers in a
+## gritty track, and the heavy thud as they meet.
+func _elevator_doors() -> PackedFloat32Array:
+	var dur := 3.6
+	var a := _buf(dur)
+	var lp := 0.0
+	var lp2 := 0.0
+	var ph := 0.0
+	for i in a.size():
+		var t := float(i) / RATE
+		var move := clampf(t / 0.3, 0.0, 1.0) * clampf((3.2 - t) / 0.2, 0.0, 1.0)
+		ph += (95.0 + 12.0 * sin(TAU * 0.7 * t)) / RATE
+		var motor := (sin(TAU * ph) * 0.5 + sin(TAU * ph * 2.0) * 0.25 + sin(TAU * ph * 3.0) * 0.12)
+		var n := randf_range(-1.0, 1.0)
+		lp += 0.08 * (n - lp)
+		lp2 += 0.4 * (n - lp2)
+		var rumble := lp * (0.7 + 0.3 * sin(TAU * 11.0 * t))
+		var grit := lp2 * 0.15 if randf() < 0.02 else 0.0
+		a[i] = (motor * 0.25 + rumble * 1.2 + grit) * move
+	var thud := _strike(0.6, 0.006, 0.3, [[62.0, 8.0, 1.0], [140.0, 12.0, 0.7], [310.0, 18.0, 0.4], [780.0, 30.0, 0.2]], 0.5)
+	var at := int(3.15 * RATE)
+	for i in thud.size():
+		if at + i < a.size():
+			a[at + i] += thud[i] * 1.4
+	return _normalize(a, 0.9)
+
+
+## A halogen / fluorescent tube's buzz: mains hum (60 Hz and its harmonics,
+## rough and slightly clipped), plus a thin high whine. Loops every 2 s.
+func _halogen_buzz() -> PackedFloat32Array:
+	var a := _buf(2.0)
+	for i in a.size():
+		var t := float(i) / RATE
+		var hum := 0.0
+		for h in [[60.0, 0.5], [120.0, 1.0], [180.0, 0.45], [240.0, 0.5], [360.0, 0.3], [480.0, 0.2], [600.0, 0.12]]:
+			hum += sin(TAU * h[0] * t) * h[1]
+		hum = clampf(hum * 0.6, -0.8, 0.8)
+		a[i] = hum * 0.6 + sin(TAU * 8000.0 * t) * 0.02 + randf_range(-0.03, 0.03)
+	return _normalize(a, 0.6)
+
+
+## The tube failing: a sharp electrical crackle and a burst of louder buzz.
+func _halogen_flick() -> PackedFloat32Array:
+	var dur := randf_range(0.08, 0.2)
+	var a := _buf(dur)
+	var spark := 0.0
+	for i in a.size():
+		var t := float(i) / RATE
+		if randf() < 0.03:
+			spark = randf_range(-1.0, 1.0)
+		spark *= 0.85
+		var buzz := clampf((sin(TAU * 120.0 * t) + sin(TAU * 240.0 * t) * 0.6) * 1.5, -0.7, 0.7)
+		a[i] = (spark * 0.8 + buzz * 0.5) * exp(-t * 14.0) * minf(t / 0.002, 1.0)
+	return _normalize(a, 0.75)
+
+
+## The cab lurches and starts down: a deep clunk and a falling groan of cables.
+func _elevator_drop() -> PackedFloat32Array:
+	var dur := 2.5
+	var a := _strike(dur, 0.01, 0.25, [[45.0, 3.0, 1.0], [92.0, 5.0, 0.7], [210.0, 9.0, 0.4]], 0.4)
+	var ph := 0.0
+	for i in a.size():
+		var t := float(i) / RATE
+		ph += (180.0 - 60.0 * t / dur) / RATE
+		var groan := (sin(TAU * ph) + 0.4 * sin(TAU * ph * 2.03)) * sin(PI * t / dur) * 0.06
+		a[i] += groan
+	return _normalize(a, 0.85)
+
+
+## The jump scare: a split-second of silence-breaking noise. A hard, low
+## impact, a ragged inhuman shriek (several detuned voices that bend and
+## warble against each other) and its clicks firing all at once.
+func _jumpscare() -> PackedFloat32Array:
+	var dur := 1.4
+	var a := _buf(dur)
+	var phases := [0.0, 0.0, 0.0, 0.0]
+	var bases := [740.0, 1130.0, 1610.0, 2290.0]
+	for i in a.size():
+		var t := float(i) / RATE
+		var env := minf(t / 0.008, 1.0) * exp(-t * 2.2)
+		var v := 0.0
+		for k in 4:
+			var f: float = bases[k] * (1.0 + 0.08 * sin(TAU * (13.0 + k * 3.0) * t) - 0.18 * t)
+			phases[k] = fmod(phases[k] + f / RATE, 1.0)
+			v += (phases[k] * 2.0 - 1.0) * (0.35 - k * 0.05)   # raw saw voices
+		v = clampf(v * 1.8, -0.9, 0.9)                          # torn and overdriven
+		v += randf_range(-1.0, 1.0) * 0.25 * exp(-t * 6.0)     # breath in the scream
+		var boom := sin(TAU * (55.0 - 20.0 * t) * t) * exp(-t * 7.0) * 1.2
+		a[i] = v * env + boom
+	# Its clicks, all at once.
+	for k in 14:
+		var at := int(randf_range(0.0, 0.5) * RATE)
+		for j in int(0.003 * RATE):
+			if at + j < a.size():
+				a[at + j] += randf_range(-1.0, 1.0) * 0.7
+	return _normalize(a, 0.98)
+
+
+## It just heard you run. harsh: a rising, rattling screech; otherwise
+## (Explorer) a fast, quiet burst of clicking chatter - a warning, not a scare.
+func _listener_alert(harsh: bool) -> PackedFloat32Array:
+	var dur := 0.9 if harsh else 0.7
+	var a := _buf(dur)
+	var ph := 0.0
+	for i in a.size():
+		var t := float(i) / RATE
+		var env := sin(PI * minf(t / dur, 1.0)) * minf(t / 0.02, 1.0)
+		var v := 0.0
+		if harsh:
+			var f := 420.0 + 900.0 * t + 60.0 * sin(TAU * 37.0 * t)
+			ph = fmod(ph + f / RATE, 1.0)
+			var rattle := 0.5 + 0.5 * signf(sin(TAU * 31.0 * t))
+			v = clampf((ph * 2.0 - 1.0) * 1.6, -0.8, 0.8) * (0.6 + 0.4 * rattle) + randf_range(-0.2, 0.2)
+		a[i] = v * env
+	# Clicks: rapid, accelerating.
+	var t2 := 0.0
+	var gap := 0.06
+	while t2 < dur - 0.05:
+		var at := int(t2 * RATE)
+		for j in int(0.002 * RATE):
+			if at + j < a.size():
+				a[at + j] += randf_range(-1.0, 1.0) * (0.5 if harsh else 0.9)
+		t2 += gap
+		gap = maxf(gap * 0.88, 0.015)
+	var out := a.duplicate()
+	_add(out, _reso(a, 2400.0, 60.0), 0.01)
+	return _normalize(out, 0.9 if harsh else 0.6)
+
+
+## Its joints snapping as it jumps: a cluster of dry cracks, like knuckles
+## or green sticks, and a short sucked-in breath played backwards.
+func _listener_snap() -> PackedFloat32Array:
+	var dur := 0.7
+	var excite := _buf(dur)
+	var t := 0.0
+	for k in randi_range(4, 7):
+		var at := int(t * RATE)
+		for j in int(0.0012 * RATE):
+			if at + j < excite.size():
+				excite[at + j] += randf_range(-1.0, 1.0) * randf_range(0.5, 1.0)
+		t += randf_range(0.012, 0.05)
+	var out := _buf(dur)
+	for m in [[680.0, 70.0, 1.0], [1450.0, 90.0, 0.8], [2900.0, 120.0, 0.5], [310.0, 50.0, 0.6]]:
+		_add(out, _reso(excite, m[0] * randf_range(0.9, 1.1), m[1]), m[2] * 0.03)
+	_add(out, excite, 0.6)
+	# A reversed inhale: swelling breath noise that cuts off.
+	var lp := 0.0
+	for i in out.size():
+		var tt := float(i) / RATE
+		if tt < 0.2:
+			continue
+		lp += 0.25 * (randf_range(-1.0, 1.0) - lp)
+		var k2 := (tt - 0.2) / (dur - 0.2)
+		out[i] += lp * pow(k2, 2.0) * 0.5 * (1.0 if k2 < 0.97 else 0.0)
+	return _normalize(out, 0.85)
+
+
+## You hitting the floor on your back: a heavy, dull thump with a scuff.
+func _body_fall() -> PackedFloat32Array:
+	var a := _strike(0.6, 0.02, 0.15, [[58.0, 9.0, 1.0], [96.0, 12.0, 0.7], [180.0, 20.0, 0.4]], 0.6)
+	var scuff := _surf_concrete()
+	for i in scuff.size():
+		if i < a.size():
+			a[i] += scuff[i] * 0.4
+	return _normalize(a, 0.9)
+
+
+## Leaning over you (gentle version): a low unsteady drone and slow wet clicks.
+func _listener_loom() -> PackedFloat32Array:
+	var dur := 2.8
+	var a := _buf(dur)
+	for i in a.size():
+		var t := float(i) / RATE
+		var env := minf(t / 0.8, 1.0) * minf((dur - t) / 0.4, 1.0)
+		a[i] = (sin(TAU * 48.0 * t) * 0.5 + sin(TAU * 50.5 * t) * 0.4 + sin(TAU * 97.0 * t) * 0.15) * env
+	for k in 9:
+		var at := int(randf_range(0.3, dur - 0.3) * RATE)
+		var click := _strike(0.08, 0.001, 0.8, [[1900.0, 80.0, 1.0], [3100.0, 120.0, 0.5]], 0.3)
+		for j in click.size():
+			if at + j < a.size():
+				a[at + j] += click[j] * 0.35
+	return _normalize(a, 0.7)
 
 
 ## Glass smashing: a sharp crack, then bright shards tinkling down.

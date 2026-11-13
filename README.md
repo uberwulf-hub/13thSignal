@@ -50,7 +50,13 @@ MERIDIAN at all.
 
 **The monsters**
 
-- **THE LISTENER** is blind and hears everything. Listen for its clicking: the faster it clicks, the closer it is to finding you.
+- **THE LISTENER** is blind and hears everything. **Running is a bad idea:** when it hears you run (or walk
+  on a grate, or bang a door) it stops dead, rears up and screeches, then comes for the sound much faster
+  than it walks. If it catches you, you fall backwards and it bends down over you, face to face. In Survivor
+  and Nightmare that's a full jump scare: its face is suddenly right in yours, with a shriek. (Explorer keeps it
+  gentle: no shriek, it just leans slowly down over you. A parent can switch on the full version for Explorer
+  in **Parent Settings**.)
+  More about the Listener: Listen for its clicking: the faster it clicks, the closer it is to finding you.
   The **NOISE** bar shows how far your sound carries. Running is loud, the orange metal grates are LOUD, and
   crouching is quieter, but not silent. **Doors are heavy blast doors:** opening one is a bang it can hear from
   far away, and the clank as it shuts gives away where you just were.
@@ -60,7 +66,7 @@ MERIDIAN at all.
   **It's hard to predict.** It stops at random to listen, gets hunches about where you are and comes to check,
   and when it hunts you it heads for where you're going and lunges. When it stops to listen, it can sense you
   close by even if you're silent, so don't stand still right next to it. **Don't stare at it, either:** look at it too long
-  and it twitches, then glitches out in a burst of static and reappears a few metres away (in Nightmare it
+  and it twitches, then glitches: the picture tears, it leaves black smears of itself behind, and it reappears a few metres away (in Nightmare it
   prefers to come closer). (Explorer keeps all of this gentle: no
   crawl-learning, no close-range sensing, no lunges, rare hunches, and it only ever glitches away from you.)
 - **THE REPLACEMENT** is a scientist mannequin that only moves when you can't see it. It wakes up when the power comes back on.
@@ -73,7 +79,11 @@ MERIDIAN at all.
 3. Flip the three breakers in the right order. In the wrong order they trip with a loud alarm.
 4. The elevator door shows a colour order. Find the four painted numbers (red, blue, green, yellow) around the sector.
    Look at them with your light and they go in your journal.
-5. Type the code at the elevator and step in.
+5. Type the code at the elevator and step in. The doors close behind you... and the light starts to fail.
+
+**Your items come with you.** Whatever is in your inventory when you ride the elevator down is still in your
+pockets in the next sector (and if you get caught, you keep them). Starting a sector from the main menu
+means empty pockets.
 
 ### Items and your inventory
 
@@ -198,7 +208,8 @@ as a download on the run's page.
 ## Art and models
 
 Floors, walls, ceilings, grates, doors and lockers use real photographed textures from
-[Poly Haven](https://polyhaven.com) (CC0; see `licenses/POLYHAVEN-TEXTURES.txt`). The flashlight, wrench, clipboard and stapler are
+[Poly Haven](https://polyhaven.com) (CC0; see `licenses/POLYHAVEN-TEXTURES.txt`). The menus use the **Special Elite** typewriter font by Astigmatic (Apache 2.0; see
+`licenses/SPECIAL-ELITE-FONT-LICENSE.txt`). The flashlight, wrench, clipboard and stapler are
 Poly Haven CC0 models (see `licenses/POLYHAVEN-MODELS.txt`). The signal fragments are dark crystals built in
 code, and all sounds are synthesized in code. The Replacement and the
 showroom mannequins are built from smooth shapes in code. To use a real mannequin model instead, put a CC0

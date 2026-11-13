@@ -4,6 +4,7 @@ extends Control
 
 const PinPad := preload("res://scripts/pin_pad.gd")
 
+var _scare_btn: Button
 var _title: Label
 var _mode_button: Button
 var _mode_blurb: Label
@@ -54,11 +55,14 @@ func _ready() -> void:
 	_title = Label.new()
 	_title.text = "THE 13TH SIGNAL"
 	_title.add_theme_font_size_override("font_size", 56)
-	_title.add_theme_color_override("font_color", Color(0.85, 0.95, 1.0))
+	_title.add_theme_color_override("font_color", Game.INK)
+	_title.add_theme_color_override("font_shadow_color", Color(0.75, 0.1, 0.06, 0.6))
+	_title.add_theme_constant_override("shadow_offset_x", 4)
+	_title.add_theme_constant_override("shadow_offset_y", 1)
 	col.add_child(_title)
 	var tag := Label.new()
 	tag.text = "You were never supposed to hear it."
-	tag.add_theme_color_override("font_color", Color(0.45, 0.7, 0.85))
+	tag.add_theme_color_override("font_color", Color(0.62, 0.55, 0.45))
 	col.add_child(tag)
 	var spacer := Control.new()
 	spacer.custom_minimum_size.y = 8
@@ -104,7 +108,7 @@ func _ready() -> void:
 	advisory.text = "No blood or gore. Scares come from sound, darkness and surprise.   Controls: WASD move  |  Shift run  |  Ctrl crouch  |  E use  |  F flashlight  |  Space hold breath  |  R turn relay / stop recording  |  Tab journal"
 	advisory.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	advisory.add_theme_font_size_override("font_size", 14)
-	advisory.add_theme_color_override("font_color", Color(0.4, 0.55, 0.65))
+	advisory.add_theme_color_override("font_color", Game.INK_DIM)
 	col.add_child(advisory)
 
 	_refresh_mode()
@@ -171,6 +175,7 @@ func _cycle_mode() -> void:
 
 func _start(scene: String) -> void:
 	Sound.stop_ambient()
+	Game.carried = {}   # a fresh start from the menu: empty pockets
 	get_tree().change_scene_to_file(scene)
 
 
@@ -249,6 +254,10 @@ func _build_parent(col: VBoxContainer) -> void:
 	_parent_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_parent_status.custom_minimum_size.x = 640
 	_parent_box.add_child(_parent_status)
+	_scare_btn = _add_button(_parent_box, "", func():
+		Game.explorer_scares = not Game.explorer_scares
+		Game.save_settings()
+		_refresh_parent())
 	_add_button(_parent_box, "CHANGE PARENT PIN", func(): _create_pin_flow())
 	_add_button(_parent_box, "LOCK SCARY MODES NOW", func():
 		Game.lock_scary_modes()
@@ -262,6 +271,8 @@ func _build_parent(col: VBoxContainer) -> void:
 
 
 func _refresh_parent() -> void:
+	if _scare_btn:
+		_scare_btn.text = "EXPLORER CATCH SCARE:  " + ("FULL JUMP SCARE" if Game.explorer_scares else "GENTLE (no jump scare)")
 	var state := "UNLOCKED for this session" if Game.scary_unlocked else "LOCKED"
 	_parent_status.text = ("PARENT SETTINGS\n\nThe game always starts in EXPLORER mode. Survivor and Nightmare "
 		+ "need this PIN once each time the game is opened.\n\nScary modes right now: %s") % state

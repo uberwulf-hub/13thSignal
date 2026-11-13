@@ -93,8 +93,37 @@ void fragment() {
 	_fuzz = ColorRect.new()
 	_fuzz.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_fuzz.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_fuzz_mat = Game.static_material(0.0)
+	# Not TV static: when the Listener is close or glitches, the picture itself
+	# goes wrong - it tears sideways in bands, the colours split apart, the
+	# edges close in and everything drains towards a sick red.
+	var wsh := Shader.new()
+	wsh.code = """
+shader_type canvas_item;
+uniform float amount = 0.0;
+uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
+float rnd(float x) { return fract(sin(x * 91.7) * 43758.5453); }
+void fragment() {
+	vec2 uv = SCREEN_UV;
+	float t = floor(TIME * 16.0);
+	float band = floor(uv.y * 11.0 + rnd(t) * 11.0);
+	float tear = step(1.0 - amount * 0.55, rnd(band + t * 3.1)) * (rnd(band * 1.7 + t) - 0.5) * 0.14 * amount;
+	float wob = sin(uv.y * 7.0 + TIME * 2.3) * 0.005 * amount;
+	vec2 o = vec2(tear + wob, 0.0);
+	float ca = 0.014 * amount;
+	vec3 col = vec3(texture(screen_tex, uv + o + vec2(ca, 0.0)).r,
+		texture(screen_tex, uv + o).g,
+		texture(screen_tex, uv + o - vec2(ca, ca * 0.5)).b);
+	float lum = dot(col, vec3(0.3, 0.59, 0.11));
+	col = mix(col, vec3(lum * 1.15, lum * 0.7, lum * 0.65), clamp(amount * 0.6, 0.0, 1.0));
+	float vig = smoothstep(0.95, 0.25, distance(uv, vec2(0.5)));
+	col *= mix(1.0, vig, clamp(amount * 0.7, 0.0, 1.0));
+	COLOR = vec4(col, 1.0);
+}
+"""
+	_fuzz_mat = ShaderMaterial.new()
+	_fuzz_mat.shader = wsh
 	_fuzz.material = _fuzz_mat
+	_fuzz.visible = false
 	_root.add_child(_fuzz)
 	_locker_view = _make_locker_view()
 	_root.add_child(_locker_view)
@@ -110,7 +139,7 @@ void fragment() {
 	_prompt.position += Vector2(-300, 30)
 	_root.add_child(_prompt)
 
-	_objective = _label("", 18, Color(0.75, 0.9, 1.0))
+	_objective = _label("", 19, Game.INK)
 	_objective.position = Vector2(24, 20)
 	_objective.custom_minimum_size.x = 620
 	_objective.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -147,7 +176,7 @@ void fragment() {
 	_breath_box.custom_minimum_size.x = 400
 	_breath_box.visible = false
 	_root.add_child(_breath_box)
-	_breath_hint = _label("Hold SPACE to hold your breath when it comes close.", 16, Color(0.8, 0.9, 1.0))
+	_breath_hint = _label("Hold SPACE to hold your breath when it comes close.", 16, Game.INK)
 	_breath_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_breath_box.add_child(_breath_hint)
 	_breath_bar = ProgressBar.new()
@@ -165,9 +194,9 @@ void fragment() {
 	_root.add_child(_sub_box)
 	var sv := VBoxContainer.new()
 	_sub_box.add_child(sv)
-	_sub_name = _label("", 16, Color(0.5, 0.85, 1.0))
+	_sub_name = _label("", 16, Color(0.75, 0.68, 0.5))
 	sv.add_child(_sub_name)
-	_sub_text = _label("", 20, Color(0.92, 0.96, 1.0))
+	_sub_text = _label("", 20, Game.INK)
 	_sub_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_sub_text.custom_minimum_size.x = 620
 	sv.add_child(_sub_text)
@@ -230,11 +259,11 @@ void fragment() {
 	_journal_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_journal_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	jcol.add_child(_journal_scroll)
-	_journal_text = _label("", 18, Color(0.9, 0.95, 1.0))
+	_journal_text = _label("", 18, Game.INK)
 	_journal_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_journal_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_journal_scroll.add_child(_journal_text)
-	var jhint := _label("Scroll: mouse wheel / arrow keys" + (" / drag" if Game.use_touch() else ""), 13, Color(0.55, 0.65, 0.75))
+	var jhint := _label("Scroll: mouse wheel / arrow keys" + (" / drag" if Game.use_touch() else ""), 13, Game.INK_DIM)
 	jhint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	jcol.add_child(jhint)
 	get_viewport().size_changed.connect(_layout_journal)
@@ -247,7 +276,7 @@ void fragment() {
 	_static.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_static.visible = false
 	_root.add_child(_static)
-	_caught_label = _label("", 48, Color(1, 1, 1))
+	_caught_label = _label("", 48, Game.INK)
 	_caught_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_caught_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_caught_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -263,6 +292,13 @@ void fragment() {
 	_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_fade)
 	create_tween().tween_property(_fade, "color:a", 0.0, 2.0)
+
+
+## Big titles look badly printed: a faint red ghost of the text, out of register.
+static func _misprint(l: Label) -> void:
+	l.add_theme_color_override("font_shadow_color", Color(0.75, 0.1, 0.06, 0.55))
+	l.add_theme_constant_override("shadow_offset_x", 3)
+	l.add_theme_constant_override("shadow_offset_y", 1)
 
 
 func _label(text: String, size: int, color: Color) -> Label:
@@ -441,15 +477,29 @@ func set_dread(amount: float) -> void:
 
 func set_fuzz(amount: float) -> void:
 	_fuzz_amount = lerpf(_fuzz_amount, amount, 0.15)
-	var flicker := 0.6 + 0.4 * randf()
-	var level := _fuzz_amount * 0.3 * flicker
+	var level := _fuzz_amount * 0.35
 	if _glitch_t > 0.0:
 		_glitch_t -= get_process_delta_time()
-		level = maxf(level, 0.55 * flicker)
+		level = maxf(level, 0.9)
+	if _jump_t > 0.0:
+		_jump_t -= get_process_delta_time()
+		level = 1.0
+	_fuzz.visible = level > 0.02
 	_fuzz_mat.set_shader_parameter("amount", level)
 
 
-## A short burst of static over the whole screen (the Listener glitching).
+var _jump_t := 0.0
+
+
+## The jump scare: the picture tears apart and flashes red for a moment.
+func jump_flash() -> void:
+	_jump_t = 0.35
+	_fade.color = Color(0.45, 0.0, 0.0, 0.35)
+	var t := create_tween()
+	t.tween_property(_fade, "color", Color(0, 0, 0, 0.0), 0.5)
+
+
+## The picture tears for a moment (the Listener glitching).
 func glitch_flash(seconds := 0.25) -> void:
 	_glitch_t = seconds
 
@@ -485,16 +535,20 @@ func show_locker(on: bool) -> void:
 
 
 func show_caught(soft: bool, text: String, on_done: Callable) -> void:
+	# Cut to black, then the words.
+	_static.material = null
+	_static.color = Color(0, 0, 0, 0)
 	_static.visible = true
-	_caught_label.visible = true
+	_caught_label.visible = false
 	_caught_label.text = text
-	_caught_label.add_theme_font_size_override("font_size", 34 if soft else 56)
-	var mat: ShaderMaterial = _static.material
+	_caught_label.add_theme_font_size_override("font_size", 34 if soft else 52)
+	_misprint(_caught_label)
 	var t := create_tween()
-	t.tween_method(func(v): mat.set_shader_parameter("amount", v), 0.0, 0.92 if soft else 1.0, 0.35 if soft else 0.12)
-	t.tween_interval(2.4)
+	t.tween_property(_static, "color:a", 1.0, 0.25 if soft else 0.05)
+	t.tween_callback(func(): _caught_label.visible = true)
+	t.tween_interval(2.2)
 	t.tween_callback(on_done)
-	t.tween_method(func(v): mat.set_shader_parameter("amount", v), 0.92, 0.0, 0.8)
+	t.tween_property(_static, "color:a", 0.0, 0.8)
 	t.tween_callback(func():
 		_static.visible = false
 		_caught_label.visible = false)
@@ -505,6 +559,22 @@ func flash_black(seconds: float) -> void:
 	var t := create_tween()
 	t.tween_interval(seconds)
 	t.tween_property(_fade, "color:a", 0.0, 0.3)
+
+
+## Cutscenes: hide everything except the fade-to-black.
+var _cinematic := false
+
+
+func cinematic(on: bool) -> void:
+	_cinematic = on
+	for c in _root.get_children():
+		if c == _fade:
+			continue
+		if on:
+			c.set_meta("was_visible", c.visible)
+			c.visible = false
+		elif c.has_meta("was_visible"):
+			c.visible = c.get_meta("was_visible")
 
 
 func fade_out(seconds: float, on_done: Callable) -> void:
@@ -561,7 +631,11 @@ func toggle_pause() -> void:
 	])
 
 
+var end_shown := false
+
+
 func show_end(title: String, body: String, next_scene := "") -> void:
+	end_shown = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	_fade.color.a = 1.0
 	var buttons: Array = []
@@ -580,9 +654,10 @@ func _menu_panel(title: String, body: String, buttons: Array) -> Control:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 12)
 	p.add_child(v)
-	var t := _label(title, 36, Color(0.85, 0.95, 1.0))
+	var t := _label(title, 40, Game.INK)
+	_misprint(t)
 	v.add_child(t)
-	var b := _label(body, 18, Color(0.75, 0.85, 0.95))
+	var b := _label(body, 18, Game.INK.darkened(0.08))
 	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	b.custom_minimum_size.x = 560
 	v.add_child(b)
@@ -616,6 +691,9 @@ func _process(delta: float) -> void:
 	if sector and sector.player:
 		set_meters(sector.player)
 	_update_subtitles(delta)
+	if _cinematic:
+		_sub_box.visible = false
+		_journal.visible = false
 
 
 func _update_subtitles(delta: float) -> void:
@@ -631,7 +709,7 @@ func _update_subtitles(delta: float) -> void:
 		var who: Array = SPEAKERS.get(_line_style, SPEAKERS["ai"])
 		_sub_name.text = who[0]
 		var name_color: Color = who[1]
-		_sub_text.add_theme_color_override("font_color", Color(0.92, 0.96, 1.0))
+		_sub_text.add_theme_color_override("font_color", Game.INK)
 		if _line_style == "echo":
 			# ECHO copies MERIDIAN's voice. Explorer gives a hint that it's wrong.
 			if Game.mode_data()["echo_hint"]:
