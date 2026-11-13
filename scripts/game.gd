@@ -25,7 +25,7 @@ const SECTORS := [
 const MODES := [
 	{
 		"name": "EXPLORER",
-		"blurb": "No jump scares (a parent can turn them on). Gentler monsters that never learn to check lockers - but it still hears you run. Puzzle-focused.",
+		"blurb": "No jump scares (older players can switch on the full catch scare below). Gentler monsters that never learn to check lockers - but it still hears you run. Puzzle-focused.",
 		"color": Color(0.45, 0.85, 1.0),
 		"listener_speed": 0.85, "hearing": 0.8,
 		"learn_hide": 0, "learn_sprint": 45.0,
@@ -85,7 +85,9 @@ var _pin_hash := ""
 # --- This launch only ---
 var mode: int = Mode.EXPLORER        # always starts in Explorer
 var scary_unlocked := false          # the Parent PIN was entered this launch
-var explorer_scares := false         # parent setting: full catch scare in Explorer too
+var explorer_scares := false         # parent setting: full catch scare in Explorer, always
+var players_can_unlock_scares := true  # parent setting: the menu's math-question switch is allowed
+var session_scares := false          # switched on from the menu; forgotten when the game closes
 
 # --- This run: what the monster has learned about you ---
 var hide_count := 0
@@ -285,6 +287,7 @@ func load_settings() -> void:
 	sector_unlocked = cfg.get_value("progress", "sector_unlocked", 1)
 	_pin_hash = cfg.get_value("parent", "pin_hash", "")
 	explorer_scares = cfg.get_value("parent", "explorer_scares", false)
+	players_can_unlock_scares = cfg.get_value("parent", "players_can_unlock_scares", true)
 	apply_volume()
 
 
@@ -302,6 +305,7 @@ func save_settings() -> void:
 	cfg.set_value("progress", "sector_unlocked", sector_unlocked)
 	cfg.set_value("parent", "pin_hash", _pin_hash)
 	cfg.set_value("parent", "explorer_scares", explorer_scares)
+	cfg.set_value("parent", "players_can_unlock_scares", players_can_unlock_scares)
 	cfg.save(SAVE_PATH)
 
 
@@ -504,4 +508,4 @@ void fragment() {
 ## The full jump-scare version of being caught? Always in Survivor and
 ## Nightmare; in Explorer only if a parent has switched it on.
 func full_scares() -> bool:
-	return not is_explorer() or explorer_scares
+	return not is_explorer() or explorer_scares or session_scares

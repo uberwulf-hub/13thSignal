@@ -742,6 +742,40 @@ func _ready() -> void:
 	s.queue_free()
 	await wait(0.3)
 
+	# --- The menu's switch for the full catch scare (older players) ---
+	Game.mode = Game.Mode.EXPLORER
+	Game.explorer_scares = false
+	Game.players_can_unlock_scares = true
+	Game.session_scares = false
+	var menu = load("res://scenes/main_menu.tscn").instantiate()
+	add_child(menu)
+	await wait(0.5)
+	check(menu._scares_button.visible and not Game.full_scares(), "Explorer starts with the gentle catch scare, and shows the switch")
+	menu._scares_pressed()
+	await wait(0.2)
+	var rx := RegEx.create_from_string("(\\d+) x (\\d+)")
+	var qm := rx.search(menu._pad._title.text)
+	var right_answer := str(int(qm.get_string(1)) * int(qm.get_string(2)))
+	menu._pad.submitted.emit("1" if right_answer != "1" else "2")
+	await wait(0.2)
+	check(not Game.full_scares() and menu._pad != null and is_instance_valid(menu._pad), "a wrong answer keeps it gentle (and asks a new question)")
+	qm = rx.search(menu._pad._title.text)
+	menu._pad.submitted.emit(str(int(qm.get_string(1)) * int(qm.get_string(2))))
+	await wait(0.2)
+	check(Game.full_scares() and Game.session_scares, "the right times-table answer switches the full catch scare on")
+	Game.save_settings()
+	var cfg := ConfigFile.new()
+	cfg.load(Game.SAVE_PATH)
+	check(not cfg.has_section_key("parent", "session_scares"), "...only until the game closes (it isn't saved)")
+	menu._scares_pressed()
+	check(not Game.full_scares(), "pressing it again switches it straight back off")
+	Game.players_can_unlock_scares = false
+	menu._refresh_scares()
+	check(menu._scares_button.disabled, "a parent can lock the switch")
+	Game.players_can_unlock_scares = true
+	menu.queue_free()
+	await wait(0.3)
+
 	Game.lock_scary_modes()
 	print("\n%s (%d failed)" % ["ALL PASSED" if failures == 0 else "SOME TESTS FAILED", failures])
 	get_tree().quit(1 if failures > 0 else 0)

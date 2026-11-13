@@ -24,6 +24,12 @@ MERIDIAN at all.
 - **Set the PIN first:** Main menu → **PARENT SETTINGS** → choose 4 digits, then type them again.
   Until a PIN exists, the scary modes stay locked.
 - In Parent Settings you can also **LOCK SCARY MODES NOW**, change the PIN, or remove it (which keeps the scary modes locked).
+- **Explorer's catch scare.** By default, getting caught in Explorer is gentle: you fall and the Listener slowly
+  leans over you, with no shriek. Older players can switch on the **full** version (its face suddenly in yours,
+  with a shriek) from the main menu's **CATCH SCARE** button. It asks a times-table question (13-19 times 6-9),
+  easy for an older kid and not something a little one does by accident. It lasts **only until the game is
+  closed**, so the next person starts gentle again. In Parent Settings you can turn that switch off, or make the
+  full scare permanent for Explorer.
 - Only a salted hash of the PIN is saved, never the digits themselves.
 - **Forgot the PIN?** Delete the settings file and make a new one:
   `%APPDATA%\Godot\app_userdata\The 13th Signal\the_13th_signal.cfg` on Windows.
@@ -55,7 +61,9 @@ MERIDIAN at all.
   than it walks. If it catches you, you fall backwards and it bends down over you, face to face. In Survivor
   and Nightmare that's a full jump scare: its face is suddenly right in yours, with a shriek. (Explorer keeps it
   gentle: no shriek, it just leans slowly down over you. A parent can switch on the full version for Explorer
-  in **Parent Settings**.)
+  in **Parent Settings**. Older players can also switch it on themselves from the main menu: **CATCH SCARE** asks
+  a times-table question (like 17 x 6) that a little one won't answer by accident. It stays on only until the game
+  is closed, and a parent can lock the switch in Parent Settings.)
   More about the Listener: Listen for its clicking: the faster it clicks, the closer it is to finding you.
   The **NOISE** bar shows how far your sound carries. Running is loud, the orange metal grates are LOUD, and
   crouching is quieter, but not silent. **Doors are heavy blast doors:** opening one is a bang it can hear from
@@ -185,22 +193,23 @@ The game also builds as an Android app (`The13thSignal-android.apk`), and SauceS
   A Bluetooth game controller works too. **Options → On-screen controls** switches them Auto / On / Off.
 - **Options → Graphics** is Low / Medium / High. Phones start on Low (no flashlight shadows or glow).
 
-### Android signing key (set this up once)
+### Android signing key (handled for you)
 
-Android only installs an update over an older copy if both were signed with the **same key**. Until you set
-your own key, the build makes one and keeps it in the GitHub Actions cache. That works, but if the cache is ever
-cleared, phones would have to uninstall the game (and lose their save) before installing the next version. To
-use your own permanent key, add these repository secrets (**Settings → Secrets and variables → Actions**):
+Android only installs an update over an older copy if both were signed with the **same key**. The build keeps
+that key in a **private draft release** called *Android signing key (private - do not publish or delete)*.
+Drafts never expire, and only people who can push to this repository can see them. Every build downloads the key
+from there, so the key never changes and updates always install over the old copy. **Leave that draft alone:**
+don't publish it and don't delete it. (Deleting it would mean a new key, and phones would have to uninstall
+the game before the next update.) You can download its two files from the Releases page as a backup.
+
+Optional: to use a key of your own instead, add these repository secrets (**Settings → Secrets and variables →
+Actions**). They take priority over the stored key. Changing keys means phones must reinstall once.
 
 | Secret | What it is |
 |---|---|
 | `ANDROID_KEYSTORE_BASE64` | the `.keystore` file, base64-encoded |
 | `ANDROID_KEYSTORE_ALIAS` | the key's alias |
 | `ANDROID_KEYSTORE_PASSWORD` | its password |
-
-Make a key with `keytool -genkeypair -v -keystore the13thsignal.keystore -alias the13thsignal -keyalg RSA -keysize 2048 -validity 10000`,
-then `base64 -w0 the13thsignal.keystore` gives the text for the first secret. Keep the file somewhere safe and
-use a different key from Race Track Mayhem's.
 
 To build just the Android app without releasing, run **Actions → Android → Run workflow**; the `.apk` is kept
 as a download on the run's page.

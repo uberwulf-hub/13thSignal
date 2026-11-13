@@ -5,6 +5,8 @@ extends Control
 const PinPad := preload("res://scripts/pin_pad.gd")
 
 var _scare_btn: Button
+var _allow_btn: Button
+var _scares_button: Button
 var _title: Label
 var _mode_button: Button
 var _mode_blurb: Label
@@ -94,6 +96,7 @@ func _ready() -> void:
 	_mode_blurb.custom_minimum_size = Vector2(480, 56)
 	_mode_blurb.add_theme_font_size_override("font_size", 15)
 	right.add_child(_mode_blurb)
+	_scares_button = _add_button(right, "", _scares_pressed)
 	_add_button(right, "OPTIONS", _show_options)
 	_add_button(right, "PARENT SETTINGS", _open_parent)
 	_add_button(right, "QUIT", func(): get_tree().quit())
@@ -151,6 +154,59 @@ func _refresh_mode() -> void:
 	_mode_button.text = "MODE:  %s%s" % [m["name"], lock]
 	_mode_button.add_theme_color_override("font_color", m["color"])
 	_mode_blurb.text = m["blurb"]
+	_refresh_scares()
+
+
+## Explorer's catch scare. Older players can switch the full jump scare on by
+## answering a times-table question (13-19 times 6-9): easy for them, not
+## something a little one does by accident. It stays on only until the game
+## closes, so the next person to play starts gentle again.
+func _refresh_scares() -> void:
+	if _scares_button == null:
+		return
+	_scares_button.visible = Game.is_explorer()
+	_scares_button.disabled = false
+	if Game.explorer_scares:
+		_scares_button.text = "CATCH SCARE:  FULL   (set by a parent)"
+		_scares_button.disabled = true
+	elif Game.session_scares:
+		_scares_button.text = "CATCH SCARE:  FULL   (until the game closes)"
+	elif not Game.players_can_unlock_scares:
+		_scares_button.text = "CATCH SCARE:  GENTLE   (parent-locked)"
+		_scares_button.disabled = true
+	else:
+		_scares_button.text = "CATCH SCARE:  GENTLE   (older players: switch on)"
+	_scares_button.add_theme_color_override("font_color", Game.RUST.lightened(0.3) if Game.full_scares() else Game.INK)
+
+
+func _scares_pressed() -> void:
+	if Game.session_scares:
+		Game.session_scares = false
+		_refresh_scares()
+		return
+	_ask_scare_question("")
+
+
+func _ask_scare_question(note: String) -> void:
+	var a := randi_range(13, 19)
+	var b := randi_range(6, 9)
+	var answer := str(a * b)
+	_close_pad()
+	_pad = PinPad.new()
+	add_child(_pad)
+	await _pad.setup(("FULL CATCH SCARE - OLDER PLAYERS ONLY\n\nWhen the Listener catches you, its face is suddenly "
+		+ "right in yours, with a shriek.\n\nTo switch it on, answer:   %d x %d = ?") % [a, b], false, answer.length())
+	if note != "":
+		_pad.show_message(note)
+	_pad.cancelled.connect(_close_pad)
+	_pad.submitted.connect(func(typed: String):
+		if typed == answer:
+			_close_pad()
+			Game.session_scares = true
+			Sound.play("sting", -10.0)
+			_refresh_scares()
+		else:
+			_ask_scare_question("Not quite. Try this one."))
 
 
 func _cycle_mode() -> void:
@@ -258,6 +314,12 @@ func _build_parent(col: VBoxContainer) -> void:
 		Game.explorer_scares = not Game.explorer_scares
 		Game.save_settings()
 		_refresh_parent())
+	_allow_btn = _add_button(_parent_box, "", func():
+		Game.players_can_unlock_scares = not Game.players_can_unlock_scares
+		if not Game.players_can_unlock_scares:
+			Game.session_scares = false
+		Game.save_settings()
+		_refresh_parent())
 	_add_button(_parent_box, "CHANGE PARENT PIN", func(): _create_pin_flow())
 	_add_button(_parent_box, "LOCK SCARY MODES NOW", func():
 		Game.lock_scary_modes()
@@ -272,7 +334,10 @@ func _build_parent(col: VBoxContainer) -> void:
 
 func _refresh_parent() -> void:
 	if _scare_btn:
-		_scare_btn.text = "EXPLORER CATCH SCARE:  " + ("FULL JUMP SCARE" if Game.explorer_scares else "GENTLE (no jump scare)")
+		_scare_btn.text = "EXPLORER CATCH SCARE:  " + ("ALWAYS FULL JUMP SCARE" if Game.explorer_scares else "GENTLE unless switched on")
+	if _allow_btn:
+		_allow_btn.text = "PLAYERS CAN SWITCH IT ON (times-table question):  " + ("YES" if Game.players_can_unlock_scares else "NO")
+	_refresh_scares()
 	var state := "UNLOCKED for this session" if Game.scary_unlocked else "LOCKED"
 	_parent_status.text = ("PARENT SETTINGS\n\nThe game always starts in EXPLORER mode. Survivor and Nightmare "
 		+ "need this PIN once each time the game is opened.\n\nScary modes right now: %s") % state

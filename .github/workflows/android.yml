@@ -4,12 +4,16 @@
 # to the GitHub release as The13thSignal-android.apk.
 #
 # Signing: Android only installs an update over an older copy if both were
-# signed with the same key. Set these repository secrets once to use your own
-# permanent key (Settings > Secrets and variables > Actions):
+# signed with the same key, so the key must never change. It's handled for you:
+# the key is kept in a private DRAFT release named "Android signing key". Drafts
+# never expire and only people who can push to this repository can see them, so
+# don't publish or delete it. (The first build that finds no stored key moves the
+# key earlier builds kept in the Actions cache there, or makes a new one.)
+# Optional: to use your own key instead, set these repository secrets
+# (Settings > Secrets and variables > Actions); they take priority:
 #   ANDROID_KEYSTORE_BASE64   the .keystore file, base64-encoded
 #   ANDROID_KEYSTORE_ALIAS    the key's alias
 #   ANDROID_KEYSTORE_PASSWORD its password
-# Without them, a key is made on the first build and kept in the Actions cache.
 name: Android
 
 on:
@@ -72,8 +76,8 @@ jobs:
             rm /tmp/templates.tpz
           fi
 
-      - name: Keep the signing key between builds
-        uses: actions/cache@v4
+      - name: Find the key earlier builds kept in the Actions cache (moved to the draft release below)
+        uses: actions/cache/restore@v4
         with:
           path: ~/android-key
           key: the13thsignal-android-signing-key-v1
@@ -83,6 +87,7 @@ jobs:
           KEY_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
           KEY_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
           mkdir -p ~/android-key
@@ -91,15 +96,36 @@ jobs:
             ALIAS="$KEY_ALIAS"; PASS="$KEY_PASS"
             echo "Using the signing key from the repository secrets."
           else
-            ALIAS="the13thsignal"; PASS="the13thsignal"
-            if [ ! -f ~/android-key/release.keystore ]; then
-              keytool -genkeypair -v -keystore ~/android-key/release.keystore -alias "$ALIAS" \
-                -keyalg RSA -keysize 2048 -validity 10000 -storepass "$PASS" -keypass "$PASS" \
-                -dname "CN=The 13th Signal, O=uberwulf, C=US"
-              echo "::warning::Made a new signing key. Phones with an older copy must uninstall it before installing this one."
+            KEY_TITLE="Android signing key (private - do not publish or delete)"
+            REL=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" \
+              --jq ".[] | select(.draft and .name == \"$KEY_TITLE\") | .id" | head -1)
+            if [ -n "$REL" ]; then
+              for f in release.keystore key.txt; do
+                ID=$(gh api "repos/$GITHUB_REPOSITORY/releases/$REL/assets" --jq ".[] | select(.name == \"$f\") | .id")
+                gh api -H "Accept: application/octet-stream" "repos/$GITHUB_REPOSITORY/releases/assets/$ID" > ~/android-key/$f
+              done
+              echo "Using the signing key kept in the private draft release."
             else
-              echo "Using the cached signing key."
+              if [ -f ~/android-key/release.keystore ]; then
+                # The key earlier builds made (and kept in the cache): keep using it,
+                # so phones that already have the game can still update.
+                echo "the13thsignal the13thsignal" > ~/android-key/key.txt
+                echo "Moving the cached signing key into a private draft release, to keep it for good."
+              else
+                NEWPASS=$(openssl rand -hex 16)
+                keytool -genkeypair -v -keystore ~/android-key/release.keystore -alias the13thsignal \
+                  -keyalg RSA -keysize 2048 -validity 10000 -storepass "$NEWPASS" -keypass "$NEWPASS" \
+                  -dname "CN=The 13th Signal, O=uberwulf, C=US"
+                echo "the13thsignal $NEWPASS" > ~/android-key/key.txt
+                echo "::warning::Made a new signing key. Phones with an older copy must uninstall it before installing this one."
+              fi
+              gh release create android-signing-key --draft --repo "$GITHUB_REPOSITORY" \
+                --title "$KEY_TITLE" \
+                --notes "The key that signs the Android app. Every build uses it, so updates install over older copies. Keep this as a draft (only people who can push to the repository can see drafts). Don't publish or delete it." \
+                ~/android-key/release.keystore ~/android-key/key.txt
             fi
+            read -r ALIAS PASS < ~/android-key/key.txt
+            keytool -list -keystore ~/android-key/release.keystore -storepass "$PASS" -alias "$ALIAS" | grep -i fingerprint || true
           fi
           keytool -genkeypair -keystore ~/android-key/debug.keystore -alias androiddebugkey \
             -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android \

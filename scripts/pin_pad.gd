@@ -14,15 +14,15 @@ var _msg: Label
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	theme = Game.theme
 	var dim := ColorRect.new()
 	dim.color = Color(0, 0, 0, 0.7)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
 	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 	var panel := PanelContainer.new()
 	center.add_child(panel)
@@ -31,7 +31,7 @@ func _ready() -> void:
 	panel.add_child(v)
 	_title = Label.new()
 	_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_title.custom_minimum_size.x = 340
+	_title.custom_minimum_size.x = 480
 	_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(_title)
 	_display = Label.new()
@@ -42,17 +42,18 @@ func _ready() -> void:
 	_msg = Label.new()
 	_msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_msg.custom_minimum_size.x = 340
+	_msg.custom_minimum_size.x = 480
 	v.add_child(_msg)
 	var grid := GridContainer.new()
 	grid.columns = 3
+	grid.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	grid.add_theme_constant_override("h_separation", 8)
 	grid.add_theme_constant_override("v_separation", 8)
 	v.add_child(grid)
 	for label in ["1", "2", "3", "4", "5", "6", "7", "8", "9", "<", "0", "OK"]:
 		var b := Button.new()
 		b.text = label
-		b.custom_minimum_size = Vector2(104, 58)
+		b.custom_minimum_size = Vector2(104, 52)
 		b.add_theme_font_size_override("font_size", 26)
 		b.focus_mode = Control.FOCUS_NONE
 		b.pressed.connect(_press.bind(label))
