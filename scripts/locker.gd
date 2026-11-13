@@ -13,6 +13,7 @@ func setup(s: Node, wall_normal: Vector3) -> void:
 	facing = wall_normal
 	collision_layer = 3
 	collision_mask = 0
+	set_meta("surface", "metal")
 	rotation.y = atan2(facing.x, facing.z)
 	var mat: StandardMaterial3D = Game.tex_mat("door", 1.2, Color(0.55, 0.75, 0.7), 0.5)
 	if mat == null:

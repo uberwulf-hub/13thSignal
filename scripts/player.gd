@@ -47,7 +47,7 @@ var _exhausted := false
 
 func _ready() -> void:
 	collision_layer = 4
-	collision_mask = 1
+	collision_mask = 1 | 8      # walls, and mannequins: you can't walk through them
 	floor_snap_length = 0.3
 	capsule = CapsuleShape3D.new()
 	capsule.radius = 0.35
@@ -73,31 +73,18 @@ func _ready() -> void:
 	torch.position = Vector3(-0.45, -0.36, -0.6)
 	torch.rotation = Vector3(0.05, 0.08, 0)
 	cam.add_child(torch)
-	var body_mat := StandardMaterial3D.new()
-	body_mat.albedo_color = Color(0.32, 0.33, 0.35)   # brushed grey metal
-	body_mat.roughness = 0.3
-	body_mat.metallic = 0.7
-	var tube := MeshInstance3D.new()
-	var tm := CylinderMesh.new()
-	tm.top_radius = 0.024
-	tm.bottom_radius = 0.02
-	tm.height = 0.24
-	tube.mesh = tm
-	tube.material_override = body_mat
-	tube.rotation.x = PI / 2.0
-	torch.add_child(tube)
-	var head := MeshInstance3D.new()
-	var hm := CylinderMesh.new()
-	hm.top_radius = 0.034
-	hm.bottom_radius = 0.026
-	hm.height = 0.06
-	head.mesh = hm
-	head.material_override = body_mat
-	head.rotation.x = PI / 2.0
-	head.position.z = -0.14
-	torch.add_child(head)
+	# A real flashlight model (Poly Haven, CC0), lens pointing forward.
+	var torch_model := Items.real_model("small_plastic_torch", Vector3(0, PI, 0))
+	if torch_model:
+		torch_model.position = Vector3(0, -0.03, 0.04)
+		torch.add_child(torch_model)
 	flashlight.position = Vector3(-0.45, -0.36, -0.76)
 	cam.add_child(flashlight)
+	# Aim the beam (and the flashlight in your hand) at the crosshair, about
+	# 10 m ahead, instead of straight out from your hand.
+	var aim := (Vector3(0, 0, -10.0) - flashlight.position).normalized()
+	flashlight.basis = Basis.looking_at(aim, Vector3.UP)
+	torch.basis = Basis.looking_at((Vector3(0, 0, -10.0) - torch.position).normalized(), Vector3.UP)
 	# Your right hand holds the selected item.
 	_hand = Node3D.new()
 	_hand.position = Vector3(0.52, -0.34, -0.6)

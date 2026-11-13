@@ -148,6 +148,7 @@ func _custom_cell(k: String, cell: Vector2i) -> void:
 			var body := StaticBody3D.new()
 			body.collision_layer = 1
 			body.collision_mask = 0
+			body.set_meta("surface", "glass")
 			add_child(body)
 			_shape(body, Vector3(0.12, WALL_H, S), p + Vector3(0, WALL_H / 2.0, 0))
 		"G":
@@ -184,6 +185,7 @@ func _spawn_emitter(cell: Vector2i) -> void:
 	add_child(l)
 	var body := StaticBody3D.new()
 	body.collision_layer = 1
+	body.set_meta("surface", "metal")
 	add_child(body)
 	_shape(body, Vector3(0.9, 1.1, 0.9), p + Vector3(0, 0.55, 0))
 
@@ -213,6 +215,7 @@ func _spawn_receiver(cell: Vector2i) -> void:
 	add_child(ring)
 	var body := StaticBody3D.new()
 	body.collision_layer = 1
+	body.set_meta("surface", "metal")
 	add_child(body)
 	_shape(body, Vector3(0.8, 1.4, 0.8), p + Vector3(0, 0.7, 0))
 

@@ -181,6 +181,7 @@ func _spawn_booth(cell: Vector2i) -> void:
 	var p := cell_to_world(cell)
 	var body := StaticBody3D.new()
 	body.collision_layer = 1
+	body.set_meta("surface", "metal")
 	add_child(body)
 	_shape(body, Vector3(1.2, 2.2, 1.2), p + Vector3(0, 1.1, 0))
 	_box(Vector3(1.2, 2.2, 1.2), p + Vector3(0, 1.1, 0), _mat(Color(0.2, 0.22, 0.25), 0.5, 0.6))

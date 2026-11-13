@@ -39,6 +39,7 @@ var _note_body: Label
 var _note_t := 0.0
 var _journal: PanelContainer
 var _journal_text: Label
+var _journal_scroll: ScrollContainer
 var _clues: Array[String] = []
 var _static: ColorRect
 var _caught_label: Label
@@ -219,15 +220,25 @@ void fragment() {
 	nv.add_child(_note_body)
 
 	# Journal (Tab).
+	# It scrolls when the list gets long: mouse wheel, arrow keys, or drag on a touch screen.
 	_journal = PanelContainer.new()
-	_journal.set_anchors_preset(Control.PRESET_CENTER)
-	_journal.custom_minimum_size = Vector2(640, 380)
-	_journal.position -= Vector2(320, 190)
 	_journal.visible = false
 	_root.add_child(_journal)
+	var jcol := VBoxContainer.new()
+	_journal.add_child(jcol)
+	_journal_scroll = ScrollContainer.new()
+	_journal_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_journal_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	jcol.add_child(_journal_scroll)
 	_journal_text = _label("", 18, Color(0.9, 0.95, 1.0))
 	_journal_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_journal.add_child(_journal_text)
+	_journal_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_journal_scroll.add_child(_journal_text)
+	var jhint := _label("Scroll: mouse wheel / arrow keys" + (" / drag" if Game.use_touch() else ""), 13, Color(0.55, 0.65, 0.75))
+	jhint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	jcol.add_child(jhint)
+	get_viewport().size_changed.connect(_layout_journal)
+	_layout_journal()
 
 	# Caught: static.
 	_static = ColorRect.new()
@@ -349,11 +360,21 @@ func is_talking() -> bool:
 	return _sub_box.visible or not _lines.is_empty()
 
 
+var _notes_seen: Dictionary = {}
+
+
+## Show a note, a photo, a terminal, a fragment... once. After that it's
+## in your journal, so reading it again just says so (no big panel).
 func show_note(title: String, body: String) -> void:
+	var key := title + "|" + body
+	if _notes_seen.has(key):
+		toast("In your journal (TAB)", 1.5)
+		return
+	_notes_seen[key] = true
 	_note_title.text = title
-	_note_body.text = body + "\n\n(Saved to your journal: TAB)"
+	_note_body.text = body
 	_note_panel.visible = true
-	_note_t = 9.0
+	_note_t = 7.0
 
 
 func add_clue(text: String) -> void:
@@ -361,7 +382,47 @@ func add_clue(text: String) -> void:
 		return
 	_clues.append(text)
 	_refresh_journal()
-	toast("Journal updated (TAB)", 2.5)
+	if not _note_panel.visible:
+		toast("Journal updated (TAB)", 2.0)
+
+
+## The journal fits the screen, however big or small the window is.
+func _layout_journal() -> void:
+	var sz := get_viewport().get_visible_rect().size
+	var w := minf(760.0, sz.x - 40.0)
+	var h := minf(560.0, sz.y * 0.78)
+	_journal.custom_minimum_size = Vector2(w, h)
+	_journal.size = Vector2(w, h)
+	_journal.position = (sz - Vector2(w, h)) / 2.0
+
+
+func journal_open() -> bool:
+	return _journal.visible
+
+
+func scroll_journal(pixels: float) -> void:
+	_journal_scroll.scroll_vertical = int(_journal_scroll.scroll_vertical + pixels)
+
+
+## While the journal is open the mouse wheel scrolls it (instead of
+## switching the item in your hand).
+func _input(event: InputEvent) -> void:
+	if not _journal.visible:
+		return
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			scroll_journal(-60.0)
+			get_viewport().set_input_as_handled()
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			scroll_journal(60.0)
+			get_viewport().set_input_as_handled()
+	elif event is InputEventKey and event.pressed:
+		if event.keycode == KEY_UP or event.keycode == KEY_PAGEUP:
+			scroll_journal(-60.0 if event.keycode == KEY_UP else -400.0)
+			get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_DOWN or event.keycode == KEY_PAGEDOWN:
+			scroll_journal(60.0 if event.keycode == KEY_DOWN else 400.0)
+			get_viewport().set_input_as_handled()
 
 
 func _refresh_journal() -> void:
@@ -548,7 +609,10 @@ func _process(delta: float) -> void:
 		_note_t -= delta
 		if _note_t <= 0.0:
 			_note_panel.visible = false
-	_journal.visible = Input.is_action_pressed("journal") and _pause == null
+	var jopen := Input.is_action_pressed("journal") and _pause == null
+	if jopen and not _journal.visible:
+		_journal_scroll.scroll_vertical = 0
+	_journal.visible = jopen
 	if sector and sector.player:
 		set_meters(sector.player)
 	_update_subtitles(delta)

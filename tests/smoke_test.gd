@@ -537,6 +537,39 @@ func _ready() -> void:
 	await wait(0.8)
 	check(rep.global_position.distance_to(rp) < 0.01, "a mannequin can't move in a glow stick's light")
 	rep.active = false
+	# Mannequins are solid: you can't walk through one, and things bounce off it.
+	var Rep = load("res://scripts/replacement.gd")
+	var dummy: Node3D = Rep.build_model()
+	s.add_child(dummy)
+	dummy.global_position = s.cell_to_world(Vector2i(3, 7))
+	await wait(0.2)
+	pl.global_position = dummy.global_position + Vector3(1.2, 0, 0)
+	check(pl.test_move(pl.global_transform, Vector3(-1.5, 0, 0)), "you can't walk through a mannequin")
+	var wr = WI.new()
+	s.add_child(wr)
+	wr.setup(s, "wrench")
+	wr.thrown = true
+	wr.global_position = dummy.global_position + Vector3(1.0, 1.1, 0)
+	wr.linear_velocity = Vector3(-7.0, 0, 0)
+	await wait(1.5)
+	check(is_instance_valid(wr) and wr.global_position.x > dummy.global_position.x, "a thrown wrench bounces off a mannequin instead of going through")
+	check(is_instance_valid(wr) and wr.hit_mannequin, "...and the mannequin makes a sound when it's hit")
+	check(is_instance_valid(wr) and "concrete" in wr.surfaces_hit, "...then it clatters on the concrete floor (%s)" % [wr.surfaces_hit if is_instance_valid(wr) else []])
+	for snd in ["obj_can", "obj_steel", "obj_ceramic", "obj_bottle", "obj_board", "surf_concrete", "surf_metal", "surf_grate", "surf_glass", "surf_mannequin", "mq_hit_reaction"]:
+		if Sound.stream(snd) == null:
+			check(false, "impact sound exists: " + snd)
+	dummy.queue_free()
+	# The journal scrolls when it gets long.
+	for i in 40:
+		s.hud.add_clue("Test clue number %d, which is long enough to wrap around a line or two in the journal panel." % i)
+	Input.action_press("journal")
+	await wait(0.3)
+	var jsc: ScrollContainer = s.hud._journal_scroll
+	s.hud.scroll_journal(300.0)
+	await wait(0.1)
+	check(s.hud.journal_open() and jsc.scroll_vertical > 0, "a long journal scrolls")
+	check(s.hud._journal.size.y <= get_viewport().get_visible_rect().size.y, "...and fits on the screen")
+	Input.action_release("journal")
 	var before_count: int = pl.inventory.size()
 	pl.drop_item()
 	check(pl.inventory.size() == before_count - 1, "G drops the item in your hand")

@@ -144,7 +144,10 @@ func _input(event: InputEvent) -> void:
 			_stick_knob.position = _stick_origin + off - _stick_knob.size * 0.5
 			_set_move(off / STICK_RADIUS)
 		elif event.index == _look_index and sector.player:
-			sector.player.touch_look(event.relative)
+			if sector.hud and sector.hud.journal_open():
+				sector.hud.scroll_journal(-event.relative.y)   # drag to scroll the journal
+			else:
+				sector.player.touch_look(event.relative)
 
 
 func _set_move(v: Vector2) -> void:

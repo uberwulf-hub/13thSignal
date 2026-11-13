@@ -1,0 +1,9 @@
+3D models in assets/models/ come from Poly Haven (https://polyhaven.com) and are
+released under CC0 1.0 (public domain). No attribution is required; credited anyway.
+
+assets/models/small_plastic_torch  "Small Plastic Torch"  https://polyhaven.com/a/small_plastic_torch
+assets/models/adjustable_wrench    "Adjustable Wrench"    https://polyhaven.com/a/adjustable_wrench
+assets/models/clipboard            "Clipboard"            https://polyhaven.com/a/clipboard
+assets/models/vintage_stapler      "Vintage Stapler"      https://polyhaven.com/a/vintage_stapler
+
+License: https://polyhaven.com/license (CC0 1.0 Universal)

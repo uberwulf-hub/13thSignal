@@ -27,6 +27,7 @@ func setup(s: Node, c: Vector2i, along_x: bool, k: String) -> void:
 	kind = k
 	collision_layer = 3
 	collision_mask = 0
+	set_meta("surface", "metal")
 	if not along_x:
 		rotation.y = PI / 2.0
 	var colors := {"door": Color(0.22, 0.26, 0.3), "keycard": Color(0.35, 0.22, 0.12), "exit": Color(0.32, 0.3, 0.12), "vault": Color(0.2, 0.24, 0.22), "gate": Color(0.22, 0.18, 0.3)}

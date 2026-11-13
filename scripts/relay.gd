@@ -21,6 +21,7 @@ func setup(s: Node, c: Vector2i) -> void:
 	home_cell = c
 	collision_layer = 3
 	collision_mask = 0
+	set_meta("surface", "metal")
 	var metal := StandardMaterial3D.new()
 	metal.albedo_color = Color(0.55, 0.57, 0.6)
 	metal.metallic = 0.7

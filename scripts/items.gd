@@ -7,21 +7,23 @@ extends RefCounted
 ##   glow     - a glow stick: crack it and toss it; its light holds mannequins still
 ##   throw    - throw it to make a noise somewhere else (a distraction)
 ##   read     - look at it (a scrap of the story); can also be dropped
-## Throwables have a noise radius (how far the Listener hears it land) and
-## some break when they hit.
+## Throwables have a noise radius (how far the Listener hears it land).
+## obj: the sound the item itself makes when it hits something (the surface it
+## hits makes its own sound too). bounce: how springy it is. breaks_at: hit
+## anything harder than this (m/s) and it shatters.
 
 const ITEMS := {
-	"battery": {"name": "Battery", "kind": "battery", "stack": 5, "short": "BATT"},
-	"glowstick": {"name": "Glow stick", "kind": "glow", "stack": 5, "short": "GLOW"},
-	"soda_can": {"name": "Soda can", "kind": "throw", "stack": 3, "short": "CAN", "noise": 14.0, "hit": "hit_metal"},
-	"bottle": {"name": "Glass bottle", "kind": "throw", "stack": 2, "short": "BTL", "noise": 18.0, "hit": "hit_glass", "breaks": true},
-	"wrench": {"name": "Wrench", "kind": "throw", "stack": 1, "short": "WRCH", "noise": 18.0, "hit": "hit_metal"},
-	"coffee_mug": {"name": "Coffee mug", "kind": "throw", "stack": 2, "short": "MUG", "noise": 12.0, "hit": "hit_glass", "breaks": true},
-	"stapler": {"name": "Stapler", "kind": "throw", "stack": 2, "short": "STPL", "noise": 10.0, "hit": "hit_metal"},
-	"clipboard": {"name": "Clipboard", "kind": "throw", "stack": 2, "short": "CLIP", "noise": 7.0, "hit": "hit_soft"},
-	"photo": {"name": "Old photograph", "kind": "read", "stack": 1, "short": "PHOTO",
+	"battery": {"name": "Battery", "kind": "battery", "stack": 5, "short": "BATT", "obj": "obj_plastic", "bounce": 0.3},
+	"glowstick": {"name": "Glow stick", "kind": "glow", "stack": 5, "short": "GLOW", "obj": "obj_plastic", "bounce": 0.35},
+	"soda_can": {"name": "Soda can", "kind": "throw", "stack": 3, "short": "CAN", "noise": 14.0, "obj": "obj_can", "bounce": 0.3},
+	"bottle": {"name": "Glass bottle", "kind": "throw", "stack": 2, "short": "BTL", "noise": 18.0, "obj": "obj_bottle", "bounce": 0.25, "breaks_at": 3.5},
+	"wrench": {"name": "Wrench", "kind": "throw", "stack": 1, "short": "WRCH", "noise": 18.0, "obj": "obj_steel", "bounce": 0.15},
+	"coffee_mug": {"name": "Coffee mug", "kind": "throw", "stack": 2, "short": "MUG", "noise": 12.0, "obj": "obj_ceramic", "bounce": 0.2, "breaks_at": 4.5},
+	"stapler": {"name": "Stapler", "kind": "throw", "stack": 2, "short": "STPL", "noise": 10.0, "obj": "obj_stapler", "bounce": 0.15},
+	"clipboard": {"name": "Clipboard", "kind": "throw", "stack": 2, "short": "CLIP", "noise": 7.0, "obj": "obj_board", "bounce": 0.05},
+	"photo": {"name": "Old photograph", "kind": "read", "stack": 1, "short": "PHOTO", "obj": "obj_paper", "bounce": 0.0,
 		"text": "A staff photo, faded. Twelve people smiling in front of the facility sign. Someone has written on the back: \"There were only twelve of us. Who is the thirteenth?\" You count again. Thirteen."},
-	"id_badge": {"name": "ID badge", "kind": "read", "stack": 1, "short": "BADGE",
+	"id_badge": {"name": "ID badge", "kind": "read", "stack": 1, "short": "BADGE", "obj": "obj_plastic", "bounce": 0.1,
 		"text": "STAFF ID - ACCESS LEVEL 2. The name has been scratched out. The photo hasn't. It looks a lot like you."},
 }
 
@@ -78,8 +80,47 @@ static func _box(size: Vector3, mat: Material, pos := Vector3.ZERO, rot := Vecto
 	return mi
 
 
+## Items that use a real model (Poly Haven, CC0) instead of simple shapes:
+## [model folder, rotation so it lies naturally on the floor].
+const REAL_MODELS := {
+	"wrench": ["adjustable_wrench", Vector3(0, 0, PI / 2.0)],
+	"clipboard": ["clipboard", Vector3.ZERO],
+	"stapler": ["vintage_stapler", Vector3.ZERO],
+}
+
+
+## A real model from assets/models/<name>/<name>.gltf, rotated, sitting on y = 0.
+static func real_model(folder: String, rot := Vector3.ZERO) -> Node3D:
+	var path := "res://assets/models/%s/%s.gltf" % [folder, folder]
+	if not ResourceLoader.exists(path):
+		return null
+	var root := Node3D.new()
+	var scene: Node3D = (load(path) as PackedScene).instantiate()
+	scene.rotation = rot
+	root.add_child(scene)
+	var box := AABB()
+	var first := true
+	for mi in scene.find_children("*", "MeshInstance3D", true, false):
+		var m: MeshInstance3D = mi
+		var t := scene.transform
+		var n: Node = m
+		var chain := Transform3D()
+		while n != scene:
+			chain = (n as Node3D).transform * chain
+			n = n.get_parent()
+		var b: AABB = (t * chain) * m.get_aabb()
+		box = b if first else box.merge(b)
+		first = false
+	scene.position = Vector3(-(box.position.x + box.size.x / 2.0), -box.position.y, -(box.position.z + box.size.z / 2.0))
+	return root
+
+
 ## The item's 3D model, standing on y = 0. `lit` makes a glow stick glow.
 static func model(id: String, lit := false) -> Node3D:
+	if REAL_MODELS.has(id):
+		var real := real_model(REAL_MODELS[id][0], REAL_MODELS[id][1])
+		if real:
+			return real
 	var root := Node3D.new()
 	match id:
 		"battery":

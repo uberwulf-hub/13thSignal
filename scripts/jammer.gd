@@ -28,6 +28,7 @@ func setup(s: Node, c: Vector2i) -> void:
 	# Layer 2 only: you can aim at it to pick it up, but you walk straight over it.
 	collision_layer = 2
 	collision_mask = 0
+	set_meta("surface", "metal")
 	var body_mat := StandardMaterial3D.new()
 	body_mat.albedo_color = Color(0.18, 0.16, 0.22)
 	body_mat.metallic = 0.6

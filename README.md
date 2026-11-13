@@ -44,8 +44,9 @@ MERIDIAN at all.
 | Use / throw the item in your hand | Left mouse button | Right trigger |
 | Pick an inventory slot | 1-6 or the scroll wheel | D-pad left / right |
 | Drop the item in your hand | G | D-pad down |
-| Journal (clues) | Tab or J (hold) | Back/View |
+| Journal (clues) | Tab or J (hold); scroll with the wheel or arrow keys | Back/View |
 | Pause | Esc | Start |
+| Fullscreen / window | F11 or Alt+Enter (or Options → Display) | |
 
 **The monsters**
 
@@ -87,6 +88,12 @@ Look at one and press **E** to pick it up.
 | Soda can, glass bottle, wrench | **Throw it to distract the Listener**: it goes to check where it landed, not where you are. Bottles smash and carry the furthest |
 | Coffee mug, stapler, clipboard | Mostly junk, but you can throw them as a (quieter) distraction. Mugs break |
 | Old photograph, ID badge | Look at them for a scrap of the story |
+
+**Everything bounces and makes a real sound.** Each hit makes two sounds: the thing itself (a can's tinny
+clank, a wrench's long ring, a mug's clink) and whatever it hit (dry concrete, a rattling grate, a booming
+metal door, a glass wall). The harder it hits, the louder it is, and the Listener hears every bounce.
+Glass and china only break if they hit hard. **Mannequins are solid:** you can't walk through them and things
+bounce off them with a hollow knock... and a moment later, something inside it moves.
 
 ### Sector 2: Archives
 
@@ -191,7 +198,9 @@ as a download on the run's page.
 ## Art and models
 
 Floors, walls, ceilings, grates, doors and lockers use real photographed textures from
-[Poly Haven](https://polyhaven.com) (CC0; see `licenses/POLYHAVEN-TEXTURES.txt`). The Replacement and the
+[Poly Haven](https://polyhaven.com) (CC0; see `licenses/POLYHAVEN-TEXTURES.txt`). The flashlight, wrench, clipboard and stapler are
+Poly Haven CC0 models (see `licenses/POLYHAVEN-MODELS.txt`). The signal fragments are dark crystals built in
+code, and all sounds are synthesized in code. The Replacement and the
 showroom mannequins are built from smooth shapes in code. To use a real mannequin model instead, put a CC0
 `.glb` at `assets/models/mannequin.glb` (see `assets/models/README.md`).
 

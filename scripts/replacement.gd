@@ -34,9 +34,27 @@ static func _plastic() -> StandardMaterial3D:
 
 
 static func build_model() -> Node3D:
-	if ResourceLoader.exists(MODEL_PATH):
-		return _imported_model()
-	return _shape_model()
+	var model := _imported_model() if ResourceLoader.exists(MODEL_PATH) else _shape_model()
+	model.add_child(_solid_body())
+	return model
+
+
+## Every mannequin is solid: you can't walk through it and things you throw
+## bounce off it. Layer 4 (value 8), so it doesn't block sight lines or the
+## look-ray (the Replacement still has to be SEEN to stay still).
+static func _solid_body() -> StaticBody3D:
+	var body := StaticBody3D.new()
+	body.collision_layer = 8
+	body.collision_mask = 0
+	body.set_meta("surface", "mannequin")
+	var torso := CollisionShape3D.new()
+	var cap := CapsuleShape3D.new()
+	cap.radius = 0.24
+	cap.height = 1.85
+	torso.shape = cap
+	torso.position.y = 0.93
+	body.add_child(torso)
+	return body
 
 
 ## The imported mannequin, scaled to a person's height and given the plastic look.

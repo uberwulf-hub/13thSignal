@@ -315,9 +315,33 @@ func _generate() -> void:
 		wl += (0.05 + 0.4 * t / 0.3) * (randf_range(-1.0, 1.0) - wl)
 		whoosh[i] = wl * sin(PI * t / 0.3) * 0.6
 	_streams["throw_whoosh"] = _wav(whoosh)
-	_set_variants("hit_metal", 3, func(): return _step_metal(0.8))
 	_set_variants("hit_glass", 3, func(): return _glass_smash())
-	_set_variants("hit_soft", 3, func(): return _step_concrete(0.8))
+	# Things you throw: each hit is two sounds, the object itself ringing and
+	# the surface it struck. Modal synthesis: a short strike excites the real
+	# resonant frequencies of that material and shape, each dying at its own rate.
+	_set_variants("obj_can", 4, func(): return _strike(0.5, 0.002, 0.9, [[540.0, 22.0, 0.5], [1180.0, 30.0, 1.0], [2490.0, 38.0, 0.8], [3920.0, 50.0, 0.6], [5650.0, 70.0, 0.4]], 0.25))
+	_set_variants("obj_steel", 4, func(): return _strike(1.6, 0.0015, 0.95, [[1630.0, 3.5, 1.0], [4490.0, 6.0, 0.7], [8790.0, 10.0, 0.4], [2950.0, 9.0, 0.25]], 0.2))
+	_set_variants("obj_stapler", 4, func(): return _strike(0.6, 0.0025, 0.8, [[870.0, 18.0, 0.7], [1940.0, 24.0, 1.0], [3300.0, 32.0, 0.6], [4700.0, 45.0, 0.3]], 0.4))
+	_set_variants("obj_ceramic", 4, func(): return _strike(0.45, 0.0015, 0.9, [[2080.0, 24.0, 1.0], [3460.0, 30.0, 0.7], [5170.0, 40.0, 0.45], [7020.0, 55.0, 0.25]], 0.2))
+	_set_variants("obj_bottle", 4, func(): return _strike(0.7, 0.0015, 0.9, [[1240.0, 12.0, 0.9], [2780.0, 16.0, 1.0], [4310.0, 24.0, 0.5], [610.0, 20.0, 0.3]], 0.15))
+	_set_variants("obj_plastic", 4, func(): return _strike(0.25, 0.002, 0.7, [[1450.0, 60.0, 1.0], [2900.0, 75.0, 0.6], [4400.0, 90.0, 0.3]], 0.5))
+	_set_variants("obj_board", 4, func(): return _board_slap())
+	_set_variants("obj_paper", 3, func(): return _noise(0.08, 0.3, 60.0, 0.3))
+	_set_variants("surf_concrete", 5, func(): return _surf_concrete())
+	_set_variants("surf_grate", 4, func(): return _step_metal(0.5))
+	_set_variants("surf_metal", 4, func(): return _strike(1.3, 0.004, 0.5, [[118.0, 5.0, 0.6], [212.0, 6.0, 1.0], [397.0, 8.0, 0.8], [641.0, 11.0, 0.6], [988.0, 15.0, 0.45], [1520.0, 20.0, 0.3], [2270.0, 28.0, 0.2]], 0.3))
+	_set_variants("surf_glass", 4, func(): return _strike(0.8, 0.002, 0.8, [[148.0, 14.0, 0.7], [1270.0, 16.0, 1.0], [2930.0, 22.0, 0.6], [4610.0, 32.0, 0.35]], 0.25))
+	_set_variants("surf_mannequin", 4, func(): return _surf_mannequin())
+	_set_variants("mq_hit_reaction", 3, func(): return _mq_hit_reaction())
+
+	# A signal fragment's hum: low tones a little out of tune with each other,
+	# beating slowly, with a faint high shimmer. Loops every 4 s.
+	var hum3 := _buf(4.0)
+	for i in hum3.size():
+		var t := float(i) / RATE
+		hum3[i] = (sin(TAU * 110.0 * t) * 0.3 + sin(TAU * 116.5 * t) * 0.25 + sin(TAU * 165.25 * t) * 0.12
+			+ sin(TAU * 1760.0 * t) * 0.03 * (0.5 + 0.5 * sin(TAU * 0.75 * t)))
+	_streams["crystal_hum"] = _wav(hum3, true)
 
 	# The mannequin moving: hollow plastic feet on concrete, creaking joints,
 	# and a foot dragging along the floor.
@@ -527,6 +551,126 @@ func _mq_scrape() -> PackedFloat32Array:
 	var out := a.duplicate()
 	_add(out, _reso(a, 620.0, 30.0), 0.01)
 	return _normalize(out, 0.55)
+
+
+## A struck object: a short burst of filtered noise (the contact) rings the
+## object's resonant modes [freq, decay per second, level]. `click` is how much
+## of the raw contact you hear on top. Each variant is detuned a little,
+## because no two hits land on exactly the same spot.
+func _strike(dur: float, contact: float, bright: float, modes: Array, click: float) -> PackedFloat32Array:
+	var excite := _buf(dur)
+	var lp := 0.0
+	var n := maxi(int(contact * RATE), 8)
+	for j in n:
+		lp += bright * (randf_range(-1.0, 1.0) - lp)
+		excite[j] = lp * sin(PI * float(j) / n)
+	var out := _buf(dur)
+	for m in modes:
+		var level: float = m[2] * randf_range(0.7, 1.15)   # where it was hit changes the mix
+		_add(out, _reso(excite, float(m[0]) * randf_range(0.96, 1.04), float(m[1]) * randf_range(0.9, 1.1)), level * 0.02)
+	_add(out, excite, click)
+	# A tiny bit of air on very short tails so they don't click off.
+	return _normalize(out, 0.85)
+
+
+## Something landing on concrete: no ring at all, just a hard, dry knock
+## with a low body thud and a scatter of grit.
+func _surf_concrete() -> PackedFloat32Array:
+	var dur := 0.25
+	var a := _buf(dur)
+	var lp := 0.0
+	var lp2 := 0.0
+	var thud_f := randf_range(90.0, 140.0)
+	var grit := 0.0
+	for i in a.size():
+		var t := float(i) / RATE
+		var nz := randf_range(-1.0, 1.0)
+		lp += 0.5 * (nz - lp)
+		lp2 += 0.12 * (nz - lp2)
+		var env := minf(t / 0.0008, 1.0) * exp(-t * 110.0)
+		if t < 0.08 and randf() < 0.006:
+			grit = randf_range(-1.0, 1.0)
+		grit *= 0.9
+		a[i] = lp * env * 0.7 + lp2 * exp(-t * 45.0) * 0.9 + sin(TAU * thud_f * t) * exp(-t * 50.0) * 0.5 + grit * 0.15
+	var out := a.duplicate()
+	_add(out, _reso(a, randf_range(1700.0, 2300.0), 120.0), 0.01)
+	return _normalize(out, 0.8)
+
+
+## Hitting a mannequin: hard, hollow fibreglass. A boxy knock with the
+## low boom of the empty body inside it - like knocking on a big plastic drum.
+func _surf_mannequin() -> PackedFloat32Array:
+	var out := _strike(0.7, 0.0025, 0.6, [[96.0, 9.0, 0.9], [163.0, 13.0, 1.0], [404.0, 22.0, 0.75], [871.0, 32.0, 0.55], [1530.0, 45.0, 0.35], [2380.0, 60.0, 0.2]], 0.3)
+	# Its arm or head knocks against its body a moment later.
+	var tap := _strike(0.25, 0.0015, 0.7, [[640.0, 40.0, 1.0], [1490.0, 55.0, 0.6]], 0.2)
+	var at := int(randf_range(0.06, 0.12) * RATE)
+	for i in tap.size():
+		if at + i < out.size():
+			out[at + i] += tap[i] * 0.3
+	return _normalize(out, 0.85)
+
+
+## A clipboard: a flat slap of hardboard, and the metal clip clacking.
+func _board_slap() -> PackedFloat32Array:
+	var out := _strike(0.35, 0.004, 0.45, [[230.0, 35.0, 1.0], [590.0, 45.0, 0.7], [1310.0, 65.0, 0.4]], 0.6)
+	var clip := _strike(0.2, 0.001, 0.9, [[3150.0, 40.0, 1.0], [5400.0, 60.0, 0.5]], 0.2)
+	var at := int(randf_range(0.01, 0.03) * RATE)
+	for i in clip.size():
+		if at + i < out.size():
+			out[at + i] += clip[i] * 0.35
+	return _normalize(out, 0.8)
+
+
+## What a mannequin does when you hit it. It's subtle, and it's wrong:
+## something small and loose rolls around INSIDE the hollow body and settles,
+## then a long, slow plastic creak like a joint easing back - and under it,
+## very faint, something like an exhale.
+func _mq_hit_reaction() -> PackedFloat32Array:
+	var dur := 2.4
+	var excite := _buf(dur)
+	# The thing rolling inside: ticks that slow down and fade.
+	var t := 0.0
+	var gap := 0.03
+	var amp := 0.8
+	while t < 0.9:
+		var start := int(t * RATE)
+		for j in int(0.0015 * RATE):
+			if start + j < excite.size():
+				excite[start + j] += randf_range(-1.0, 1.0) * amp
+		t += gap * randf_range(0.6, 1.5)
+		gap *= 1.13
+		amp *= 0.9
+	var out := _buf(dur)
+	for m in [[180.0, 8.0, 0.5], [720.0, 22.0, 1.0], [1210.0, 30.0, 0.7], [1980.0, 40.0, 0.35]]:
+		_add(out, _reso(excite, m[0] * randf_range(0.95, 1.05), m[1]), m[2] * 0.02)
+	# The joint easing back: slow stick-slip, falling in pitch.
+	var creak := _buf(dur)
+	var phase := 0.0
+	var c0 := 0.7
+	var c1 := 1.9
+	for i in creak.size():
+		var tt := float(i) / RATE
+		if tt < c0 or tt > c1:
+			continue
+		var k := (tt - c0) / (c1 - c0)
+		phase += (70.0 - 40.0 * k + randf_range(-8.0, 8.0)) / RATE
+		if phase >= 1.0:
+			phase -= 1.0
+			creak[i] = randf_range(0.5, 1.0) * sin(PI * k)
+	_add(out, _reso(creak, 930.0, 50.0), 0.012)
+	_add(out, _reso(creak, 1460.0, 60.0), 0.008)
+	# The exhale: dark breathy noise, barely there.
+	var lp := 0.0
+	var lp2 := 0.0
+	for i in out.size():
+		var tt := float(i) / RATE
+		if tt < 1.0:
+			continue
+		var k := (tt - 1.0) / (dur - 1.0)
+		lp += 0.18 * (randf_range(-1.0, 1.0) - lp)
+		lp2 += 0.03 * (lp - lp2)
+		out[i] += (lp - lp2) * sin(PI * k) * 0.22
+	return _normalize(out, 0.6)
 
 
 ## Glass smashing: a sharp crack, then bright shards tinkling down.

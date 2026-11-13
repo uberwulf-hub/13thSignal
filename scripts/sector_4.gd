@@ -135,6 +135,7 @@ func _spawn_laser(cell: Vector2i) -> void:
 	beams.add_child(light)
 	var body := StaticBody3D.new()
 	body.collision_layer = 1
+	body.set_meta("surface", "metal")
 	body.collision_mask = 0
 	body.position = p
 	body.rotation.y = beams.rotation.y

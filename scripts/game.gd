@@ -73,6 +73,7 @@ var volume := 0.8
 var brightness := 1.0
 var invert_y := false
 var touch_mode := 0                  # on-screen controls: 0 auto (phones/tablets), 1 on, 2 off
+var fullscreen := true               # no title bar; F11 or Alt+Enter switches
 var quality := -1                    # graphics: 0 low, 1 medium, 2 high (-1 = pick for this device)
 var best_times: Dictionary = {}      # mode name -> seconds
 var fragments_ever: Dictionary = {}  # fragment id -> true
@@ -102,6 +103,7 @@ func _ready() -> void:
 	_setup_input()
 	load_settings()
 	theme = _make_theme()
+	apply_display()
 
 
 const TOUCH_NAMES := ["AUTO", "ON", "OFF"]
@@ -160,6 +162,41 @@ func gfx() -> int:
 	if quality >= 0:
 		return quality
 	return 0 if is_mobile() else 2
+
+
+## Fullscreen (no title bar) or a normal window. Not on phones.
+func apply_display() -> void:
+	if is_mobile() or DisplayServer.get_name() == "headless":
+		return
+	if "--windowed" in OS.get_cmdline_user_args():
+		return   # launched with "-- --windowed" (e.g. for testing): leave the window alone
+	if fullscreen:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+		return
+	# A normal window with a title bar: 80% of the screen, 16:9, centred.
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	var screen := DisplayServer.screen_get_usable_rect(DisplayServer.window_get_current_screen())
+	var w := int(screen.size.x * 0.8)
+	var h := int(w * 9.0 / 16.0)
+	if h > screen.size.y * 0.85:
+		h = int(screen.size.y * 0.85)
+		w = int(h * 16.0 / 9.0)
+	DisplayServer.window_set_size(Vector2i(w, h))
+	DisplayServer.window_set_position(screen.position + (screen.size - Vector2i(w, h)) / 2)
+
+
+func set_fullscreen(on: bool) -> void:
+	fullscreen = on
+	apply_display()
+	save_settings()
+
+
+func _input(event: InputEvent) -> void:
+	# F11, or Alt+Enter, switches between fullscreen and a window anywhere in the game.
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_F11 or (event.keycode == KEY_ENTER and event.alt_pressed):
+			set_fullscreen(not fullscreen)
+			get_viewport().set_input_as_handled()
 
 
 func mode_data() -> Dictionary:
@@ -228,6 +265,7 @@ func load_settings() -> void:
 	invert_y = cfg.get_value("settings", "invert_y", invert_y)
 	touch_mode = clampi(int(cfg.get_value("settings", "touch", 0)), 0, 2)
 	quality = clampi(int(cfg.get_value("settings", "quality", -1)), -1, 2)
+	fullscreen = cfg.get_value("settings", "fullscreen", true)
 	best_times = cfg.get_value("progress", "best_times", {})
 	fragments_ever = cfg.get_value("progress", "fragments", {})
 	sector_unlocked = cfg.get_value("progress", "sector_unlocked", 1)
@@ -243,6 +281,7 @@ func save_settings() -> void:
 	cfg.set_value("settings", "invert_y", invert_y)
 	cfg.set_value("settings", "touch", touch_mode)
 	cfg.set_value("settings", "quality", quality)
+	cfg.set_value("settings", "fullscreen", fullscreen)
 	cfg.set_value("progress", "best_times", best_times)
 	cfg.set_value("progress", "fragments", fragments_ever)
 	cfg.set_value("progress", "sector_unlocked", sector_unlocked)

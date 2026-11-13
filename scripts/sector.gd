@@ -694,22 +694,7 @@ func _spawn_fragment(cell: Vector2i) -> void:
 	var it := Interactable.new()
 	it.position = cell_to_world(cell) + Vector3(0, 1.1, 0)
 	add_child(it)
-	var gem := MeshInstance3D.new()
-	var sm := SphereMesh.new()
-	sm.radius = 0.16
-	sm.height = 0.4
-	sm.radial_segments = 4
-	sm.rings = 2
-	gem.mesh = sm
-	gem.material_override = _glow(Color(0.65, 0.4, 1.0), 2.5)
-	it.add_child(gem)
-	var spin := gem.create_tween().set_loops()
-	spin.tween_property(gem, "rotation:y", TAU, 3.0).from(0.0)
-	var glow := OmniLight3D.new()
-	glow.light_color = Color(0.65, 0.4, 1.0)
-	glow.light_energy = 0.4
-	glow.omni_range = 2.5
-	it.add_child(glow)
+	it.add_child(preload("res://scripts/crystal.gd").new())
 	_shape_for(it, Vector3(0.6, 0.6, 0.6))
 	it.prompt_text = "Take signal fragment"
 	it.on_use = func():
@@ -774,6 +759,8 @@ func _spawn_actors() -> void:
 	replacement.setup(self)
 	replacement.rotation.y = PI / 2.0
 	replacement.visible = has_replacement
+	if not has_replacement:
+		_remove_solid(replacement)   # not in this sector: don't leave an invisible wall
 
 	if echo_enabled:
 		echo = Echo.new()
@@ -834,6 +821,12 @@ func near_glow(pos: Vector3, radius: float) -> bool:
 func emit_noise(pos: Vector3, radius: float, from_player: bool) -> void:
 	if listener and listener.is_physics_processing():
 		listener.hear(pos, radius, from_player)
+
+
+func _remove_solid(n: Node) -> void:
+	for b in n.find_children("*", "StaticBody3D", true, false):
+		b.get_parent().remove_child(b)
+		b.queue_free()
 
 
 func is_grate(pos: Vector3) -> bool:
@@ -1312,6 +1305,7 @@ func _keycard_scare() -> void:
 	await get_tree().create_timer(0.7).timeout
 	var fwd: Vector3 = -player.global_transform.basis.z
 	var mq := Replacement.build_model()
+	_remove_solid(mq)   # a glimpse in the dark, not something you bump into
 	add_child(mq)
 	mq.global_position = player.global_position + fwd * 2.2
 	mq.rotation.y = atan2(-fwd.x, -fwd.z)

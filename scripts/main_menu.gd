@@ -7,7 +7,7 @@ const PinPad := preload("res://scripts/pin_pad.gd")
 var _title: Label
 var _mode_button: Button
 var _mode_blurb: Label
-var _main_box: VBoxContainer
+var _main_box: Container
 var _options_box: VBoxContainer
 var _parent_box: VBoxContainer
 var _parent_status: Label
@@ -17,7 +17,10 @@ var _new_pin := ""
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	# Always fill the window, and refit whenever it's resized.
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_fit()
+	get_viewport().size_changed.connect(_fit)
 	theme = Game.theme
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().paused = false
@@ -36,15 +39,21 @@ func _ready() -> void:
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 48)
+		margin.add_theme_constant_override("margin_" + side, 32)
 	add_child(margin)
+	# Everything scrolls if the window is ever too small to show it all.
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	margin.add_child(scroll)
 	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 14)
-	margin.add_child(col)
+	col.add_theme_constant_override("separation", 10)
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.add_child(col)
 
 	_title = Label.new()
 	_title.text = "THE 13TH SIGNAL"
-	_title.add_theme_font_size_override("font_size", 64)
+	_title.add_theme_font_size_override("font_size", 56)
 	_title.add_theme_color_override("font_color", Color(0.85, 0.95, 1.0))
 	col.add_child(_title)
 	var tag := Label.new()
@@ -52,27 +61,38 @@ func _ready() -> void:
 	tag.add_theme_color_override("font_color", Color(0.45, 0.7, 0.85))
 	col.add_child(tag)
 	var spacer := Control.new()
-	spacer.custom_minimum_size.y = 20
+	spacer.custom_minimum_size.y = 8
 	col.add_child(spacer)
 
-	_main_box = VBoxContainer.new()
-	_main_box.add_theme_constant_override("separation", 10)
-	col.add_child(_main_box)
+	# Two columns: the sectors on the left, everything else on the right.
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 32)
+	col.add_child(row)
+	_main_box = row
+	var left := VBoxContainer.new()
+	left.add_theme_constant_override("separation", 8)
+	row.add_child(left)
+	var right := VBoxContainer.new()
+	right.add_theme_constant_override("separation", 8)
+	row.add_child(right)
+	var first: Button = null
 	for i in Game.SECTORS.size():
 		var info: Array = Game.SECTORS[i]
 		var unlocked: bool = i + 1 <= Game.sector_unlocked
-		var label: String = "START  -  " + info[0] if unlocked else info[0] + "   (clear Sector %d first)" % i
-		var b := _add_button(_main_box, label, _start.bind(String(info[1])))
+		var label: String = "START  -  " + info[0] if unlocked else info[0] + "   (clear %d first)" % i
+		var b := _add_button(left, label, _start.bind(String(info[1])))
 		b.disabled = not unlocked
-	_mode_button = _add_button(_main_box, "", _cycle_mode)
+		if first == null:
+			first = b
+	_mode_button = _add_button(right, "", _cycle_mode)
 	_mode_blurb = Label.new()
 	_mode_blurb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_mode_blurb.custom_minimum_size = Vector2(560, 56)
-	_mode_blurb.add_theme_font_size_override("font_size", 16)
-	_main_box.add_child(_mode_blurb)
-	_add_button(_main_box, "OPTIONS", _show_options)
-	_add_button(_main_box, "PARENT SETTINGS", _open_parent)
-	_add_button(_main_box, "QUIT", func(): get_tree().quit())
+	_mode_blurb.custom_minimum_size = Vector2(480, 56)
+	_mode_blurb.add_theme_font_size_override("font_size", 15)
+	right.add_child(_mode_blurb)
+	_add_button(right, "OPTIONS", _show_options)
+	_add_button(right, "PARENT SETTINGS", _open_parent)
+	_add_button(right, "QUIT", func(): get_tree().quit())
 
 	_build_options(col)
 	_build_parent(col)
@@ -88,13 +108,18 @@ func _ready() -> void:
 	col.add_child(advisory)
 
 	_refresh_mode()
-	_main_box.get_child(0).grab_focus()
+	first.grab_focus()
+
+
+func _fit() -> void:
+	position = Vector2.ZERO
+	size = get_viewport().get_visible_rect().size
 
 
 func _add_button(parent: Control, text: String, cb: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(560, 48)
+	b.custom_minimum_size = Vector2(480, 44)
 	b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	b.pressed.connect(func():
@@ -118,7 +143,7 @@ func _refresh_mode() -> void:
 	var m := Game.mode_data()
 	var lock := ""
 	if Game.mode == Game.Mode.EXPLORER and not Game.scary_unlocked:
-		lock = "   (Survivor & Nightmare: Parent Lock)"
+		lock = "   (others: Parent Lock)"
 	_mode_button.text = "MODE:  %s%s" % [m["name"], lock]
 	_mode_button.add_theme_color_override("font_color", m["color"])
 	_mode_blurb.text = m["blurb"]
@@ -173,6 +198,13 @@ func _build_options(col: VBoxContainer) -> void:
 		Game.quality = (Game.gfx() + 1) % 3
 		refresh.call())
 	refresh.call()
+	var screen_btn := _add_button(_options_box, "", func(): pass)
+	var show_screen := func():
+		screen_btn.text = "DISPLAY:  " + ("FULLSCREEN" if Game.fullscreen else "WINDOW") + "   (F11 switches any time)"
+	screen_btn.pressed.connect(func():
+		Game.set_fullscreen(not Game.fullscreen)
+		show_screen.call())
+	show_screen.call()
 	var inv := CheckBox.new()
 	inv.text = "Invert look up/down"
 	inv.button_pressed = Game.invert_y
