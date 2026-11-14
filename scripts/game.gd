@@ -33,8 +33,9 @@ const MODES := [
 		"battery_drain": 0.6, "breath_drain": 10.0, "ambient": 0.12, "wrong_code_alarm": false,
 		"echo_hint": true,
 		"echo_delay": 40.0, "echo_speed": 1.7, "echo_catches": false,
-		"learn_crouch": 0.0, "hunch_gap": Vector2(110, 160), "hunch_radius": 12.0,
-		"sense": 0.0, "lunge": false, "predict": 0.0, "door_noise": 13.0,
+		"learn_crouch": 0.0, "hunch_gap": Vector2(60, 100), "hunch_radius": 9.0,
+		"sense": 1.8, "lunge": false, "predict": 0.4, "door_noise": 13.0,
+		"hunt_memory": 4.5, "hunt_range": 10.0, "search_spots": 2,
 		"stare_glitch": 4.0, "glitch_bias": -1,
 	},
 	{
@@ -49,6 +50,7 @@ const MODES := [
 		"echo_delay": 22.0, "echo_speed": 2.3, "echo_catches": true,
 		"learn_crouch": 50.0, "hunch_gap": Vector2(40, 70), "hunch_radius": 9.0,
 		"sense": 3.5, "lunge": true, "predict": 0.8, "door_noise": 16.0,
+		"hunt_memory": 6.5, "hunt_range": 13.0, "search_spots": 3,
 		"stare_glitch": 2.5, "glitch_bias": 0,
 	},
 	{
@@ -63,6 +65,7 @@ const MODES := [
 		"echo_delay": 12.0, "echo_speed": 2.8, "echo_catches": true,
 		"learn_crouch": 25.0, "hunch_gap": Vector2(20, 40), "hunch_radius": 6.0,
 		"sense": 5.0, "lunge": true, "predict": 1.2, "door_noise": 20.0,
+		"hunt_memory": 9.0, "hunt_range": 16.0, "search_spots": 4,
 		"stare_glitch": 1.5, "glitch_bias": 1,
 	},
 ]

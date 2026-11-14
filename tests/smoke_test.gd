@@ -719,6 +719,11 @@ func _ready() -> void:
 	s.listener._alert_cool = 0.0
 	s.listener.hear(s.listener.global_position + Vector3(4, 0, 0), 12.0, true)
 	check(s.listener._alert_t > 0.0 and s.listener._rush_t > 0.0, "running near the Listener makes it rear up, screech and rush the sound")
+	s.listener.last_heard = s.cell_to_world(Vector2i(12, 7))
+	s.listener._search_left = 2
+	s.listener._after_listen()
+	check(s.listener.state == s.listener.State.INVESTIGATE and not s.listener.path.is_empty() and s.listener._search_left == 1,
+		"when it loses you, it searches the spots around where it last heard you")
 	s.listener.set_physics_process(false)
 	s.player.inventory.clear()
 	s.player.add_item("wrench")

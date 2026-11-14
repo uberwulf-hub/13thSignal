@@ -47,6 +47,7 @@ var _alert_cool := 0.0
 var _rush_t := 0.0         # ...then it comes for the sound, fast
 var posed := false         # a catch scene is posing it; don't animate
 var _face_light: OmniLight3D
+var _search_left := 0      # spots left to check around where it lost you
 
 
 func setup(s: Node) -> void:
@@ -247,6 +248,7 @@ func _animate(delta: float, moving: bool, speed: float) -> void:
 
 func reset_to(pos: Vector3) -> void:
 	global_position = pos
+	_search_left = 0
 	unpose()
 	_alert_t = 0.0
 	_rush_t = 0.0
@@ -275,11 +277,11 @@ func hear(pos: Vector3, radius: float, from_player: bool) -> void:
 		Sound.play_at("listener_chatter" if Game.is_explorer() else "listener_alert", global_position + Vector3(0, 2.4, 0), -2.0, randf_range(0.92, 1.05))
 		_ear_mat.emission_energy_multiplier = 6.0
 		_face(pos, 1.0)
-	if from_player and d < 8.0 and not sector.player.hidden_in:
+	if from_player and d < float(m["hunt_range"]) and not sector.player.hidden_in:
 		if state != State.HUNT:
 			sector.on_hunt_started()
 		state = State.HUNT
-		_hunt_t = 2.8
+		_hunt_t = float(m["hunt_memory"])
 		return
 	if state != State.HUNT:
 		state = State.INVESTIGATE
@@ -314,7 +316,7 @@ func _physics_process(delta: float) -> void:
 				if state != State.HUNT:
 					sector.on_hunt_started()
 				state = State.HUNT
-				_hunt_t = 3.5
+				_hunt_t = float(m["hunt_memory"])
 			else:
 				state = State.INVESTIGATE
 		return
@@ -348,11 +350,14 @@ func _physics_process(delta: float) -> void:
 			_hunt_t -= delta
 			_repath_t -= delta
 			if player.hidden_in:
-				# You vanished into a locker: go to where it last heard you.
+				# You vanished into a locker: go to where it last heard you,
+				# then search around there before it gives up.
 				state = State.INVESTIGATE
+				_search_left = int(m["search_spots"])
 				_go_to(last_heard)
 			elif _hunt_t <= 0.0:
 				state = State.INVESTIGATE
+				_search_left = int(m["search_spots"])
 				_go_to(last_heard)
 			else:
 				if _repath_t <= 0.0:
@@ -393,7 +398,7 @@ func _physics_process(delta: float) -> void:
 	# Caught?
 	if not player.hidden_in and not player.frozen:
 		var flat := Vector2(global_position.x - player.global_position.x, global_position.z - player.global_position.z)
-		if flat.length() < 1.15:
+		if flat.length() < 1.35:   # long arms
 			sector.on_caught("listener")
 
 
@@ -424,7 +429,7 @@ func _unpredictable(delta: float, m: Dictionary, player: Node) -> void:
 			if state != State.HUNT:
 				sector.on_hunt_started()
 			state = State.HUNT
-			_hunt_t = 2.8
+			_hunt_t = float(m["hunt_memory"])
 			_pause_t = 0.0
 			last_heard = player.global_position
 	# Lunges: sudden bursts of speed while it hunts.
@@ -563,6 +568,17 @@ func _can_reach_by_sound(player: Node) -> bool:
 
 
 func _after_listen() -> void:
+	# It lost you: it doesn't just give up. It sweeps a few spots nearby.
+	if _search_left > 0:
+		_search_left -= 1
+		var here: Vector2i = sector.world_to_cell(last_heard)
+		for i in 12:
+			var c := here + Vector2i(randi_range(-2, 2), randi_range(-2, 2))
+			if sector.grid.is_in_boundsv(c) and not sector.grid.is_point_solid(c):
+				state = State.INVESTIGATE
+				_go_to(sector.cell_to_world(c))
+				if not path.is_empty():
+					return
 	if Game.learned_lockers:
 		_locker_queue = sector.lockers_near(global_position, 10.0, 2)
 		_next_locker()
