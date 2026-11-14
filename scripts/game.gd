@@ -90,7 +90,8 @@ var mode: int = Mode.EXPLORER        # always starts in Explorer
 var scary_unlocked := false          # the Parent PIN was entered this launch
 var explorer_scares := false         # parent setting: full catch scare in Explorer, always
 var players_can_unlock_scares := true  # parent setting: the menu's math-question switch is allowed
-var session_scares := false          # switched on from the menu; forgotten when the game closes
+var session_scares := false
+var fixed_layout := false            # tests only: use the hand-made puzzle layouts          # switched on from the menu; forgotten when the game closes
 
 # --- This run: what the monster has learned about you ---
 var hide_count := 0

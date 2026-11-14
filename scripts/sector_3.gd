@@ -81,6 +81,9 @@ const FRAGMENT_TEXT_3 := [
 const Relay := preload("res://scripts/relay.gd")
 
 var relays: Array = []
+var receivers: Dictionary = RECEIVERS.duplicate()   # cell -> colour (they move each game)
+var _sol_cells: Dictionary = {}     # squares the last solution's beams cross
+var beam_solution: Dictionary = {}   # lab -> [[cell, facing], ...]: proof each lab can be solved
 var solved: Dictionary = {}       # lab name -> true
 var gates: Dictionary = {}        # cell -> door
 var receiver_lamps: Dictionary = {}   # cell -> material
@@ -102,8 +105,247 @@ func _configure() -> void:
 	echo_enabled = true
 
 
+## Key items that move to a random spot in their room each game.
+func _scatter_chars() -> Array:
+	return []   # the relays and receivers move in _setup_puzzles
+
+
+## Each game the receivers move to new spots, so every lab needs a different
+## answer. A layout is only used if the solver below can solve it with the
+## lab's relays (and it isn't too easy). The relays start scattered around
+## the part of the lab you can walk in.
+const LAB_RELAYS := {"RELAY LAB 1": [1, 1], "RELAY LAB 2": [2, 3], "RELAY LAB 3": [2, 4]}   # [fewest, most]
+const DIRS4 := [Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(0, -1)]
+
+
 func _setup_puzzles() -> void:
-	pass
+	if Game.fixed_layout:
+		return
+	for lab in LABS:
+		_randomize_lab(lab)
+
+
+func _randomize_lab(lab: String) -> void:
+	var original_map: Array = map.duplicate()
+	var lab_receivers: Array = []
+	for c in receivers:
+		if room_at(c) == lab:
+			lab_receivers.append(c)
+	var lab_relay_count := 0
+	for r in rows:
+		for c in cols:
+			if ch(Vector2i(c, r)) == "r" and room_at(Vector2i(c, r)) == lab:
+				lab_relay_count += 1
+	for attempt in 300:
+		map = original_map.duplicate()
+		# Lift the relays and receivers out, then put the receivers somewhere new.
+		var new_recv: Dictionary = {}
+		for r in rows:
+			for c in cols:
+				var cell := Vector2i(c, r)
+				if room_at(cell) == lab and ch(cell) in ["r", "O"]:
+					_set_ch(cell, ".")
+		var ok := true
+		for old in lab_receivers:
+			var spots := _receiver_spots(lab, old)
+			if spots.is_empty():
+				ok = false
+				break
+			var to: Vector2i = spots[randi() % spots.size()]
+			_set_ch(to, "O")
+			new_recv[to] = receivers[old]
+		if not ok:
+			continue
+		var usable := _lab_reachable(lab)
+		if usable.is_empty() or not _fragments_reachable(lab, usable):
+			continue
+		var sol = _solve_lab(lab, new_recv, usable)
+		if sol == null:
+			continue
+		# It works: keep it. Scatter the relays where you can reach them, but
+		# not in a transmitter's beam (so nothing lights up by itself).
+		for old in lab_receivers:
+			receivers.erase(old)
+		for c in new_recv:
+			receivers[c] = new_recv[c]
+		beam_solution[lab] = sol
+		var in_beam := _emitter_lines(lab)
+		var free: Array = []
+		for c in usable:
+			if ch(c) == "." and not in_beam.has(c) and not _sol_cells.has(c):
+				free.append(c)
+		free.shuffle()
+		for i in mini(lab_relay_count, free.size()):
+			_set_ch(free[i], "r")
+		return
+	map = original_map   # no luck: the hand-made layout
+
+
+## Where a receiver can go: plain floor in the lab, on the same side of any
+## glass as it was, and not right next to a door, a transmitter or another receiver.
+func _receiver_spots(lab: String, old: Vector2i) -> Array:
+	var rect := room_rect(lab)
+	var behind_glass := _behind_glass(lab, old)
+	var out: Array = []
+	for y in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x):
+			var c := Vector2i(x, y)
+			if ch(c) != "." or _behind_glass(lab, c) != behind_glass:
+				continue
+			var crowded := false
+			for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+				if ch(c + d) in ["D", "G", "Q", "O", "f"]:
+					crowded = true
+			if not crowded:
+				out.append(c)
+	return out
+
+
+## Is this square on the far side of the lab's glass wall (where you can't go)?
+func _behind_glass(lab: String, c: Vector2i) -> bool:
+	var rect := room_rect(lab)
+	for x in range(rect.position.x, c.x):
+		if ch(Vector2i(x, c.y)) == "w":
+			return true
+	return false
+
+
+## The squares of the lab you can walk to from its entrance.
+func _lab_reachable(lab: String) -> Dictionary:
+	var rect := room_rect(lab)
+	var todo: Array[Vector2i] = []
+	var seen: Dictionary = {}
+	for y in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x):
+			var c := Vector2i(x, y)
+			for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+				if ch(c + d) in ["D", "G"] and not rect.has_point(c + d) and _walkable(c):
+					seen[c] = true
+					todo.append(c)
+	while not todo.is_empty():
+		var c: Vector2i = todo.pop_back()
+		for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+			var n: Vector2i = c + d
+			if rect.has_point(n) and not seen.has(n) and _walkable(n):
+				seen[n] = true
+				todo.append(n)
+	return seen
+
+
+func _walkable(c: Vector2i) -> bool:
+	return ch(c) in [".", "r", "f", "i", "L"]
+
+
+func _fragments_reachable(lab: String, usable: Dictionary) -> bool:
+	var rect := room_rect(lab)
+	for y in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x):
+			if ch(Vector2i(x, y)) == "f" and not usable.has(Vector2i(x, y)):
+				return false
+	return true
+
+
+## Squares a transmitter's beam crosses before it hits anything.
+func _emitter_lines(lab: String) -> Dictionary:
+	var out: Dictionary = {}
+	for e in EMITTERS:
+		if room_at(e) != lab:
+			continue
+		var d: Vector2i = EMITTERS[e][0]
+		var c: Vector2i = e + d
+		while room_at(c) == lab and not _solve_blocked(c, lab):
+			out[c] = true
+			c += d
+	return out
+
+
+## Solve a lab: relays (cell, facing) that light every receiver, using between
+## the lab's fewest and most relays. null if it can't be done that way.
+func _solve_lab(lab: String, recv: Dictionary, usable: Dictionary):
+	var limits: Array = LAB_RELAYS[lab]
+	var emitters: Array = []
+	for e in EMITTERS:
+		if room_at(e) == lab:
+			emitters.append(e)
+	var all_relays: Array = []
+	_sol_cells.clear()
+	var avoid_pass: Dictionary = {}
+	var avoid_relay: Dictionary = {}
+	for e in emitters:
+		var want: Color = EMITTERS[e][1]
+		var target := Vector2i(-1, -1)
+		for c in recv:
+			if recv[c] == want:
+				target = c
+		if target.x < 0:
+			return null
+		var res = _solve_beam(e, EMITTERS[e][0], target, lab, usable, avoid_pass, avoid_relay, int(limits[1]) - all_relays.size())
+		if res == null or (res["relays"] as Array).is_empty():
+			return null   # every beam needs at least one relay
+		for r in res["relays"]:
+			all_relays.append(r)
+			avoid_pass[r[0]] = true
+			avoid_relay[r[0]] = true
+		for c in res["cells"]:
+			avoid_relay[c] = true
+			_sol_cells[c] = true
+	if all_relays.size() < int(limits[0]) or all_relays.size() > int(limits[1]):
+		return null
+	var out: Array = []
+	for r in all_relays:
+		out.append([r[0], DIRS4.find(r[1])])
+	return out
+
+
+func _solve_blocked(c: Vector2i, lab: String) -> bool:
+	return room_at(c) != lab or ch(c) in ["#", "Q", "V", "D", "G", "X"]
+
+
+## Fewest relays that bring a beam from a transmitter into the target:
+## {"relays": [[cell, dir]...], "cells": every square the beam crosses}, or null.
+## The beam can't cross avoid_pass (another beam's relays would grab it) and
+## no relay may go on avoid_relay (another beam's path).
+func _solve_beam(from: Vector2i, d: Vector2i, target: Vector2i, lab: String, usable: Dictionary, avoid_pass: Dictionary, avoid_relay: Dictionary, max_relays: int):
+	var frontier: Array = [[from, d, [], []]]   # start, dir, relays, cells crossed
+	var seen: Dictionary = {}
+	for turns in max_relays + 1:
+		var nxt: Array = []
+		frontier.shuffle()   # different answers on different tries
+		for st in frontier:
+			var c: Vector2i = st[0]
+			var dir: Vector2i = st[1]
+			var used: Array = st[2]
+			var crossed: Array = (st[3] as Array).duplicate()
+			for n in 60:
+				var nx: Vector2i = c + dir
+				if _solve_blocked(nx, lab) or avoid_pass.has(nx):
+					break
+				if nx == target:
+					crossed.append(nx)
+					return {"relays": used, "cells": crossed}
+				if ch(nx) == "O":
+					break   # another receiver stops it
+				var hits_own := false
+				for u in used:
+					if u[0] == nx:
+						hits_own = true
+				if hits_own:
+					break
+				c = nx
+				crossed.append(c)
+				if turns < max_relays and usable.has(c) and ch(c) == "." and not avoid_relay.has(c) and crossed.count(c) == 1:
+					for nd in DIRS4:
+						if nd == dir or nd == -dir:
+							continue
+						var key := [c, nd]
+						if seen.has(key):
+							continue
+						seen[key] = true
+						var u2: Array = used.duplicate()
+						u2.append([c, nd])
+						nxt.append([c, nd, u2, crossed.duplicate()])
+		frontier = nxt
+	return null
 
 
 func _solid_chars() -> Array:
@@ -191,7 +433,7 @@ func _spawn_emitter(cell: Vector2i) -> void:
 
 
 func _spawn_receiver(cell: Vector2i) -> void:
-	var color: Color = RECEIVERS[cell]
+	var color: Color = receivers[cell]
 	var p := cell_to_world(cell)
 	_box(Vector3(0.8, 0.9, 0.8), p + Vector3(0, 0.45, 0), _mat(Color(0.2, 0.22, 0.25), 0.5, 0.6))
 	var lamp_mat := _glow(Color(color.r * 0.25, color.g * 0.25, color.b * 0.25), 0.6)
@@ -264,7 +506,7 @@ func update_beams() -> void:
 		var cols_in: Array = inputs.get(rl, [])
 		rl.show_signal(cols_in[0] if cols_in.size() == 1 else Color.BLACK, cols_in.size() > 1)
 	for cell in receiver_lamps:
-		var want: Color = RECEIVERS[cell]
+		var want: Color = receivers[cell]
 		var lamp: StandardMaterial3D = receiver_lamps[cell]
 		var lit: bool = powered.get(cell, Color.BLACK) == want
 		lamp.emission = want if lit else Color(want.r * 0.25, want.g * 0.25, want.b * 0.25)
@@ -302,7 +544,7 @@ func _trace(from: Vector2i, d: Vector2i, color: Color, inputs: Dictionary, draw:
 				_beam(start, cell_to_world(cell) + Vector3(d.x, 0, d.y) * (S / 2.0), color)
 			return
 		cell = next
-		if RECEIVERS.has(cell):
+		if receivers.has(cell):
 			if draw:
 				_beam(start, cell_to_world(cell), color)
 				powered[cell] = color if not powered.has(cell) or powered[cell] == color else Color.WHITE
@@ -345,8 +587,8 @@ func _check_labs() -> void:
 		if solved.has(lab):
 			continue
 		var all_lit := true
-		for cell in RECEIVERS:
-			if room_at(cell) == lab and powered.get(cell, Color.BLACK) != RECEIVERS[cell]:
+		for cell in receivers:
+			if room_at(cell) == lab and powered.get(cell, Color.BLACK) != receivers[cell]:
 				all_lit = false
 		if all_lit:
 			solved[lab] = true

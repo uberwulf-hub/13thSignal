@@ -72,6 +72,7 @@ const FRAGMENT_TEXT_5 := [
 	"\"If you meet yourself down here, don't ask it which one of you is real.\"",
 ]
 
+var plates: Dictionary = PLATES.duplicate()   # plate cell -> [door, name, colour]; they move each game
 var plate_doors: Dictionary = {}    # door cell -> door
 var plate_pads: Dictionary = {}     # plate cell -> material
 var plate_down: Dictionary = {}     # plate cell -> bool
@@ -100,8 +101,42 @@ func _configure() -> void:
 	echo_enabled = true
 
 
+## Key items that move to a random spot in their room each game.
+func _scatter_chars() -> Array:
+	return []   # the plates move in _setup_puzzles (each must stay far from its door)
+
+
+## Each game the plates move to new spots in their rooms. A plate always
+## stays at least 3 squares from the door it holds (so you can't hold it
+## yourself), and the control room's plate stays across the grates from the
+## recorder (so your copy still has to cross them quietly).
 func _setup_puzzles() -> void:
-	pass
+	if Game.fixed_layout:
+		return
+	var moved: Dictionary = {}
+	for plate in plates:
+		var door: Vector2i = plates[plate][0]
+		var room := room_at(plate)
+		var rect := room_rect(room)
+		var grate_x := 999
+		for y in range(rect.position.y, rect.end.y):
+			for x in range(rect.position.x, rect.end.x):
+				if ch(Vector2i(x, y)) == "g":
+					grate_x = mini(grate_x, x)
+		var spots: Array = []
+		for y in range(rect.position.y, rect.end.y):
+			for x in range(rect.position.x, rect.end.x):
+				var c := Vector2i(x, y)
+				if c != plate and (ch(c) != "." or not _scatter_ok(c)):
+					continue
+				if absi(c.x - door.x) + absi(c.y - door.y) < 3 or c.x >= grate_x:
+					continue
+				spots.append(c)
+		var to: Vector2i = spots[randi() % spots.size()] if not spots.is_empty() else plate
+		_set_ch(plate, ".")
+		_set_ch(to, "p")
+		moved[to] = plates[plate]
+	plates = moved
 
 
 func _solid_chars() -> Array:
@@ -145,11 +180,11 @@ func _custom_cell(k: String, cell: Vector2i) -> void:
 
 
 func _door_colour_sign(d: Node, cell: Vector2i) -> void:
-	for plate in PLATES:
-		if PLATES[plate][0] == cell:
-			var col: Color = PLATES[plate][2]
+	for plate in plates:
+		if plates[plate][0] == cell:
+			var col: Color = plates[plate][2]
 			var l := Label3D.new()
-			l.text = "HELD OPEN BY THE\n%s PLATE" % PLATES[plate][1]
+			l.text = "HELD OPEN BY THE\n%s PLATE" % plates[plate][1]
 			l.font_size = 40
 			l.pixel_size = 0.004
 			l.modulate = col
@@ -159,7 +194,7 @@ func _door_colour_sign(d: Node, cell: Vector2i) -> void:
 
 
 func _spawn_plate(cell: Vector2i) -> void:
-	var info: Array = PLATES[cell]
+	var info: Array = plates[cell]
 	var col: Color = info[2]
 	var p := cell_to_world(cell)
 	_box(Vector3(2.2, 0.08, 2.2), p + Vector3(0, 0.04, 0), _mat(Color(0.25, 0.26, 0.28), 0.4, 0.8))
@@ -361,17 +396,17 @@ func _update_recording(delta: float) -> void:
 func _update_plates() -> void:
 	var pcell := world_to_cell(player.global_position)
 	var ccell := copy_cell()
-	for plate in PLATES:
+	for plate in plates:
 		var down: bool = (pcell == plate and not player.hidden_in) or ccell == plate
 		if down != plate_down[plate]:
 			plate_down[plate] = down
-			var col: Color = PLATES[plate][2]
+			var col: Color = plates[plate][2]
 			var pad: StandardMaterial3D = plate_pads[plate]
 			pad.emission = col if down else Color(col.r * 0.3, col.g * 0.3, col.b * 0.3)
 			pad.emission_energy_multiplier = 3.0 if down else 0.8
 			Sound.play_at("breaker", cell_to_world(plate), -12.0, 1.8 if down else 1.2)
-	for plate in PLATES:
-		var door_cell: Vector2i = PLATES[plate][0]
+	for plate in plates:
+		var door_cell: Vector2i = plates[plate][0]
 		var door: Node = doors.get(door_cell)
 		if door == null:
 			continue

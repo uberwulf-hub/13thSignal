@@ -159,7 +159,9 @@ func _mannequin_reacts(_obj: Object, pos: Vector3) -> void:
 func _make_noise(pos: Vector3, info: Dictionary, amount: float) -> void:
 	if _noises >= 4:
 		return
-	var radius := float(info.get("noise", 6.0)) * clampf(amount * 1.6, 0.35, 1.0) * (1.0 if _noises == 0 else 0.6)
+	# The first landing always carries (that's the point of throwing it);
+	# the bounces after it are quieter.
+	var radius := float(info.get("noise", 6.0)) * (clampf(amount * 1.6, 0.75, 1.0) if _noises == 0 else clampf(amount * 1.6, 0.35, 1.0) * 0.6)
 	_noises += 1
 	sector.emit_noise(pos, radius, false)
 

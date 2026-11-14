@@ -18,6 +18,7 @@ func wait(t: float) -> void:
 
 
 func _ready() -> void:
+	Game.fixed_layout = true   # the checks below use the hand-made puzzle layouts
 	# If a script error stops the test partway, give up instead of hanging forever.
 	get_tree().create_timer(300.0).timeout.connect(func():
 		print("FAIL  the test timed out (a script error probably stopped it)")
@@ -780,6 +781,100 @@ func _ready() -> void:
 	Game.players_can_unlock_scares = true
 	menu.queue_free()
 	await wait(0.3)
+
+	# --- Every game's puzzles are different, and always solvable ---
+	Game.fixed_layout = false
+	Game.mode = Game.Mode.EXPLORER
+	var orders: Dictionary = {}
+	for run in 4:
+		s = load("res://scenes/sector.tscn").instantiate()
+		add_child(s)
+		await wait(0.4)
+		orders[str(s.breaker_order)] = true
+		var fits := 0
+		for p in [["LEFT", "MIDDLE", "RIGHT"], ["LEFT", "RIGHT", "MIDDLE"], ["MIDDLE", "LEFT", "RIGHT"], ["MIDDLE", "RIGHT", "LEFT"], ["RIGHT", "LEFT", "MIDDLE"], ["RIGHT", "MIDDLE", "LEFT"]]:
+			var ok := true
+			for cl in s._breaker_clue_pool():
+				if cl[0] in s.breaker_clues and not cl[1].call(p):
+					ok = false
+			fits += 1 if ok else 0
+		if fits != 1:
+			check(false, "S1: the note's two clues pin down exactly one breaker order (%s)" % [s.breaker_clues])
+		var k_room := ""
+		for r in s.rows:
+			for c in s.cols:
+				if s.ch(Vector2i(c, r)) == "k":
+					k_room = s.room_at(Vector2i(c, r))
+		if k_room != "LAB 1" and k_room != s.room_at(Vector2i(3, 11)):
+			check(false, "S1: the keycard stays in its room (%s)" % k_room)
+		for side in s.breaker_order:
+			s._flip_breaker(side, s.levers[side])
+		if not s.power_on:
+			check(false, "S1: flipping the breakers in the note's order turns the power on")
+		s.queue_free()
+		await wait(0.2)
+	check(true, "S1: 4 random games - clues always pin down one order, keycard stays in its room, the order works")
+	check(orders.size() >= 2, "S1: the breaker order changes between games (%d different in 4)" % orders.size())
+	var s3_ok := true
+	var recv_sets: Dictionary = {}
+	for run in 5:
+		s = load("res://scenes/sector_3.tscn").instantiate()
+		add_child(s)
+		await wait(0.4)
+		s.listener.set_physics_process(false)
+		recv_sets[str(s.receivers.keys())] = true
+		var lit_at_start := false
+		for rc in s.powered:
+			if s.receivers.has(rc) and s.powered[rc] == s.receivers[rc]:
+				lit_at_start = true
+		if lit_at_start or not s.solved.is_empty() or s.beam_solution.size() != 3:
+			s3_ok = false
+			print("  S3 run %d: lit at start or missing solution: %s" % [run, s.beam_solution.keys()])
+		for lab in s.LABS:
+			var mine: Array = s.relays.filter(func(r): return s.room_at(r.cell) == lab)
+			var sol: Array = s.beam_solution.get(lab, [])
+			for i in sol.size():
+				s._put(mine[i], sol[i][0])
+				mine[i].set_facing(sol[i][1])
+			s.update_beams()
+		for lab in s.LABS:
+			if not s.solved.has(lab):
+				s3_ok = false
+				print("  S3 run %d: %s not solved by its solution %s; receivers %s" % [run, lab, s.beam_solution.get(lab), s.receivers])
+		s.queue_free()
+		await wait(0.2)
+	check(s3_ok, "S3: 5 random relay layouts - no receiver lit at the start, and every lab can be solved")
+	check(recv_sets.size() >= 2, "S3: the receivers move between games")
+	var s5_ok := true
+	for run in 3:
+		s = load("res://scenes/sector_5.tscn").instantiate()
+		add_child(s)
+		await wait(0.4)
+		for plate in s.plates:
+			var door: Vector2i = s.plates[plate][0]
+			var orig := Vector2i(-1, -1)
+			for op in s.PLATES:
+				if s.PLATES[op][0] == door:
+					orig = op
+			if s.room_at(plate) != s.room_at(orig) or absi(plate.x - door.x) + absi(plate.y - door.y) < 3 or not s.plate_pads.has(plate):
+				s5_ok = false
+				print("  S5: plate for door %s at %s" % [door, plate])
+		s.queue_free()
+		await wait(0.2)
+	check(s5_ok, "S5: plates move but stay in their room, 3+ squares from their door")
+	s = load("res://scenes/sector_6.tscn").instantiate()
+	add_child(s)
+	await wait(0.4)
+	var sorted_order: Array = s.board_order.duplicate()
+	sorted_order.sort()
+	var want_sorted: Array = s.CIRCUITS.duplicate()
+	want_sorted.sort()
+	check(sorted_order == want_sorted and s.circuit_known.is_empty(), "S6: the board's switches are wired to the 4 circuits in a random order, unlabelled")
+	s.flip(s.board_order[0])
+	check(s.circuit_known.has(s.board_order[0]) and s.power[s.board_order[0]], "S6: flipping a switch shows which circuit it is")
+	s.queue_free()
+	await wait(0.3)
+	Game.fixed_layout = true
 
 	Game.lock_scary_modes()
 	print("\n%s (%d failed)" % ["ALL PASSED" if failures == 0 else "SOME TESTS FAILED", failures])

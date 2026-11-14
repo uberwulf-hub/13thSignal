@@ -85,7 +85,7 @@ const CODE_COLORS := [
 	["YELLOW", Color(1.0, 0.9, 0.2)],
 ]
 
-const BREAKER_ORDER := ["RIGHT", "MIDDLE", "LEFT"]
+const BREAKER_ORDER := ["RIGHT", "MIDDLE", "LEFT"]   # the hand-made order (tests)
 
 const FRAGMENT_TEXT := [
 	"\"Sector 13 isn't on any map because we never built it. So who is broadcasting from down there?\"",
@@ -135,6 +135,9 @@ var has_keycard := false
 var power_on := false
 var exit_open := false
 var breaker_seq: Array[String] = []
+var breaker_order: Array = BREAKER_ORDER.duplicate()   # random each game
+var breaker_clues: Array = []          # the note's two lines that pin it down
+var digit_colors: Array = [0, 1, 2, 3] # which colour each painted number is
 var levers: Dictionary = {}      # "LEFT"/"MIDDLE"/"RIGHT" -> lever mesh
 var code_digits: Array[int] = []    # one digit per colour in CODE_COLORS
 var code_order: Array[int] = []     # colour indexes in the order the elevator wants
@@ -167,6 +170,12 @@ func _ready() -> void:
 	_configure()
 	rows = map.size()
 	cols = String(map[0]).length()
+	# Every game is different: key items move to a random spot in their own
+	# room (so the order you solve things in still works). Tests can turn
+	# this off to check the hand-made layouts.
+	map = map.duplicate()
+	if not Game.fixed_layout:
+		_scatter_in_room(_scatter_chars())
 	_setup_puzzles()
 	_build_environment()
 	_build_level()
@@ -202,6 +211,112 @@ func _configure() -> void:
 ## SECTOR HOOK: prepare random puzzle answers before the level is built.
 func _setup_puzzles() -> void:
 	_make_code()
+	_make_breakers()
+
+
+## A new breaker order every game, and two clues for the maintenance note
+## that together pin it down (but neither does on its own).
+func _make_breakers() -> void:
+	if Game.fixed_layout:
+		breaker_order = BREAKER_ORDER.duplicate()
+		breaker_clues = ["NEVER start with the MIDDLE breaker.", "The LEFT breaker always goes LAST."]
+		return
+	digit_colors.shuffle()
+	var sides := ["LEFT", "MIDDLE", "RIGHT"]
+	var perms: Array = []
+	for a in sides:
+		for b in sides:
+			for c in sides:
+				if a != b and b != c and a != c:
+					perms.append([a, b, c])
+	breaker_order = perms[randi() % perms.size()]
+	var clues := _breaker_clue_pool()
+	var truths: Array = []
+	for cl in clues:
+		if cl[1].call(breaker_order):
+			truths.append(cl)
+	truths.shuffle()
+	for i in truths.size():
+		for j in range(i + 1, truths.size()):
+			var fits := 0
+			var alone_i := 0
+			var alone_j := 0
+			for p in perms:
+				var ti: bool = truths[i][1].call(p)
+				var tj: bool = truths[j][1].call(p)
+				fits += 1 if ti and tj else 0
+				alone_i += 1 if ti else 0
+				alone_j += 1 if tj else 0
+			if fits == 1 and alone_i > 1 and alone_j > 1:
+				breaker_clues = [truths[i][0], truths[j][0]]
+				return
+	breaker_clues = ["The %s breaker goes FIRST." % breaker_order[0], "The %s breaker goes LAST." % breaker_order[2]]
+
+
+## Things the maintenance note might say: [text, does it hold for this order?].
+func _breaker_clue_pool() -> Array:
+	var pool: Array = []
+	for s in ["LEFT", "MIDDLE", "RIGHT"]:
+		pool.append(["NEVER start with the %s breaker." % s, func(o): return o[0] != s])
+		pool.append(["The %s breaker always goes LAST." % s, func(o): return o[2] == s])
+		pool.append(["The %s breaker never goes last." % s, func(o): return o[2] != s])
+		pool.append(["Start with the %s breaker." % s, func(o): return o[0] == s])
+		pool.append(["The %s breaker goes second." % s, func(o): return o[1] == s])
+		for t in ["LEFT", "MIDDLE", "RIGHT"]:
+			if t != s:
+				pool.append(["Flip %s straight after %s." % [s, t], func(o): return o.find(s) == o.find(t) + 1])
+				pool.append(["%s comes before %s." % [s, t], func(o): return o.find(s) < o.find(t)])
+	return pool
+
+
+## SECTOR HOOK: map characters (key items) that move to a random spot in
+## their own room each game.
+func _scatter_chars() -> Array:
+	return ["k", "n"]
+
+
+## Move each of these map characters to a random free floor square in the
+## same room: not next to a door or another object, not where you start.
+func _scatter_in_room(chars: Array) -> void:
+	var taken: Dictionary = {}
+	for r in rows:
+		for c in cols:
+			var cell := Vector2i(c, r)
+			var k := ch(cell)
+			if not k in chars:
+				continue
+			var room := room_at(cell)
+			if room == "":
+				continue
+			var spots: Array[Vector2i] = []
+			var rect: Rect2i = room_rect(room)
+			for y in range(rect.position.y, rect.end.y):
+				for x in range(rect.position.x, rect.end.x):
+					var s := Vector2i(x, y)
+					if s != cell and (not ch(s) in [".", "g"] or taken.has(s) or not _scatter_ok(s)):
+						continue
+					spots.append(s)
+			if spots.is_empty():
+				continue
+			var to: Vector2i = spots[randi() % spots.size()]
+			taken[to] = true
+			var under := ch(to)
+			_set_ch(cell, under)   # swap, so a grate floor stays a grate floor
+			_set_ch(to, k)
+
+
+## A free spot: its four neighbours are plain floor, walls, grates or lockers
+## (nothing that would block a door or crowd another object).
+func _scatter_ok(s: Vector2i) -> bool:
+	for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+		if not ch(s + d) in [".", "#", "g", "L"]:
+			return false
+	return true
+
+
+func _set_ch(c: Vector2i, k: String) -> void:
+	var row: String = map[c.y]
+	map[c.y] = row.substr(0, c.x) + k + row.substr(c.x + 1)
 
 
 ## SECTOR HOOK: a map character the base doesn't know about.
@@ -645,9 +760,9 @@ func _spawn_note(cell: Vector2i) -> void:
 	it.on_use = func():
 		Sound.play("click", -6.0)
 		hud.show_note("MAINTENANCE NOTE - BREAKER RESET",
-			"If the power trips again, reset the 3 breakers in SECURITY:\n\n- NEVER start with the MIDDLE breaker.\n- The LEFT breaker always goes LAST.\n\n"
+			"If the power trips again, reset the 3 breakers in SECURITY:\n\n- %s\n- %s\n\n" % breaker_clues
 			+ "And don't listen to the intercom about this. It's been... saying things.\n   - J.")
-		hud.add_clue("Breakers (in SECURITY): never start with MIDDLE. LEFT goes last.")
+		hud.add_clue("Breakers (in SECURITY): %s %s" % breaker_clues)
 		if not has_keycard:
 			hud.set_objective("Find a security keycard to get into SECURITY.")
 
@@ -724,7 +839,7 @@ func _spawn_fragment(cell: Vector2i) -> void:
 
 func _spawn_digit(cell: Vector2i, spot: int) -> void:
 	# Spot 1-4 shows the digit for one colour (which colour is random each game).
-	var color_index := spot
+	var color_index: int = digit_colors[spot]
 	var wp := wall_point(cell, 1.9)
 	var p: Vector3 = wp[0]
 	var n: Vector3 = wp[1]
@@ -1133,7 +1248,7 @@ func _flip_breaker(side: String, it: Node) -> void:
 	lever.material_override = _glow(Color(0.2, 1.0, 0.4), 1.4)
 	breaker_seq.append(side)
 	var i := breaker_seq.size() - 1
-	if breaker_seq[i] != BREAKER_ORDER[i]:
+	if breaker_seq[i] != breaker_order[i]:
 		# Wrong order: the breakers trip with a loud alarm.
 		await get_tree().create_timer(0.4).timeout
 		Sound.play_at("alarm", it.global_position, 4.0)
@@ -1145,7 +1260,7 @@ func _flip_breaker(side: String, it: Node) -> void:
 			l.rotation.x = 0.0
 			l.material_override = _glow(Color(0.9, 0.2, 0.15), 1.2)
 		return
-	if breaker_seq.size() == BREAKER_ORDER.size():
+	if breaker_seq.size() == breaker_order.size():
 		_power_on()
 
 
@@ -1732,7 +1847,8 @@ func _entered_room(room: String) -> void:
 			if not visited.has("note_hint"):
 				visited["note_hint"] = true
 		"SECURITY":
-			hud.say("echo", "Start with the MIDDLE breaker. Trust me.")
+			var wrong: Array = ["LEFT", "MIDDLE", "RIGHT"].filter(func(x): return x != breaker_order[0])
+			hud.say("echo", "Start with the %s breaker. Trust me." % wrong[randi() % wrong.size()])
 			if Game.mode_data()["echo_hint"]:
 				hud.say("ai", "...That was not me. Something on this channel is copying my voice. Check the maintenance note.")
 		"LAB 2":

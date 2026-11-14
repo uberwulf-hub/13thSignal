@@ -84,7 +84,17 @@ MERIDIAN at all.
   Keep your light on it.
 - **ECHO** copies MERIDIAN's voice and gives you bad advice. Check what it says against the notes you find.
 
-**Puzzles** (the colour code is different every game):
+**Every game is different.** The puzzles change each time you play:
+- **Sector 1:** the breaker order and the note's clues to it, the elevator code, which colour is painted where, and where the keycard and the note are.
+- **Sector 2:** which vault holds the drive, and where the fuse is.
+- **Sector 3:** where the receivers are, so every relay lab needs a new answer. Each layout is checked by a solver before you get it, so it can always be solved with the lab's relays.
+- **Sector 4:** where the jammers and the shutter button are.
+- **Sector 5:** where the pressure plates are. Each one always stays far enough from its door that you need your copy.
+- **Sector 6:** which switch on the power board runs which circuit (the labels are missing), and where the elevator key is.
+
+Items always stay in the same room, so the way through still works.
+
+**Sector 1's puzzles:**
 1. Find the maintenance note. It tells you the breaker order.
 2. Find the security keycard and open SECURITY, the orange door off the main hall.
 3. Flip the three breakers in the right order. In the wrong order they trip with a loud alarm.

@@ -78,6 +78,11 @@ func _configure() -> void:
 	echo_enabled = true
 
 
+## Key items that move to a random spot in their room each game.
+func _scatter_chars() -> Array:
+	return ["j", "y"]   # the jammers and the shutter button
+
+
 func _setup_puzzles() -> void:
 	pass
 

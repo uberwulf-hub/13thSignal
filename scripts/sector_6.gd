@@ -74,6 +74,11 @@ var mannequins: Array = []            # active Replacements
 var _r_spots: Array[Vector2i] = []
 var has_key := false
 var _blackout_board := 0.0
+## Which circuit each switch on the board (1-4, left to right) is wired to.
+## The labels fell off: it's different every game, and you find out by trying.
+var board_order: Array = CIRCUITS.duplicate()
+var circuit_known: Dictionary = {}     # circuit -> true once you've seen what it powers
+var _switch_labels: Dictionary = {}    # circuit -> Label3D under its switch
 
 
 func _configure() -> void:
@@ -85,6 +90,12 @@ func _configure() -> void:
 	fragment_text = FRAGMENT_TEXT_6
 	no_wander_rooms = ["ELEVATOR", ""]
 	echo_enabled = false
+
+
+## Key items that move to a random spot in their room each game.
+## (The power board's wiring is shuffled too: see _spawn_board.)
+func _scatter_chars() -> Array:
+	return ["u"]   # the elevator key
 
 
 func _setup_puzzles() -> void:
@@ -129,10 +140,16 @@ func _spawn_board(cell: Vector2i) -> void:
 	var panel := _box(Vector3(2.6, 1.4, 0.12), p + n * 0.06, _mat(Color(0.22, 0.24, 0.22), 0.6, 0.5))
 	panel.rotation.y = atan2(n.x, n.z)
 	_label("POWER BOARD  -  MAX %d CIRCUITS" % CAPACITY, p + n * 0.14 + Vector3(0, 0.55, 0), n, 30, Color(1.0, 0.8, 0.3), 0.004)
-	for i in CIRCUITS.size():
-		var circuit: String = CIRCUITS[i]
+	if Game.fixed_layout:
+		for c in CIRCUITS:
+			circuit_known[c] = true
+	else:
+		board_order.shuffle()
+		_label("(labels missing - someone's written them in as they found out)", p + n * 0.14 + Vector3(0, 0.42, 0), n, 18, Color(0.75, 0.7, 0.6), 0.004)
+	for i in board_order.size():
+		var circuit: String = board_order[i]
 		var sp := p + n * 0.14 + right * ((i - 1.5) * 0.6)
-		_label(circuit, sp + Vector3(0, -0.42, 0), n, 22, Color(0.85, 0.9, 1.0), 0.004)
+		_switch_labels[circuit] = _label(_switch_text(circuit), sp + Vector3(0, -0.42, 0), n, 22, Color(0.85, 0.9, 1.0), 0.004)
 		var lamp_mat := _glow(Color(0.25, 0.05, 0.05), 1.0)
 		_box(Vector3(0.12, 0.12, 0.04), sp + Vector3(0, 0.25, 0), lamp_mat)
 		switch_lamps[circuit] = lamp_mat
@@ -141,8 +158,18 @@ func _spawn_board(cell: Vector2i) -> void:
 		add_child(it)
 		_box(Vector3(0.14, 0.32, 0.1), Vector3.ZERO, _mat(Color(0.6, 0.6, 0.62), 0.4, 0.8), it)
 		_shape_for(it, Vector3(0.45, 0.6, 0.3))
-		it.prompt_text = "Switch the %s circuit" % circuit
-		it.on_use = func(): flip(circuit)
+		it.prompt_text = "Flip switch %d" % (i + 1)
+		it.set_meta("circuit", circuit)
+		it.on_use = func():
+			flip(circuit)
+			it.prompt_text = "Flip switch %d  (%s)" % [i + 1, circuit] if circuit_known.has(circuit) else "Flip switch %d" % (i + 1)
+		if circuit_known.has(circuit):
+			it.prompt_text = "Flip switch %d  (%s)" % [i + 1, circuit]
+
+
+func _switch_text(circuit: String) -> String:
+	var num := board_order.find(circuit) + 1
+	return "%d  %s" % [num, circuit] if circuit_known.has(circuit) else "%d  ????" % num
 
 
 func _spawn_key(cell: Vector2i) -> void:
@@ -213,6 +240,13 @@ func flip(circuit: String) -> void:
 		power[circuit] = true
 		Sound.play_at("breaker", player.global_position, -2.0, 1.2)
 		Sound.play("power_on", -10.0, 1.6)
+		if not circuit_known.has(circuit):
+			# Now you know what this switch does: write it on the board.
+			circuit_known[circuit] = true
+			var num := board_order.find(circuit) + 1
+			(_switch_labels[circuit] as Label3D).text = _switch_text(circuit)
+			hud.toast("Switch %d powers the %s." % [num, circuit if circuit == "ELEVATOR" else CIRCUIT_ROOM[circuit]], 3.0)
+			hud.add_clue("Power board: switch %d = %s" % [num, circuit])
 	_apply_power()
 
 
@@ -352,7 +386,8 @@ func _entered_room(room: String) -> void:
 	match room:
 		"MAIN HALL":
 			listener.set_physics_process(true)
-			hud.set_objective("Use the power board: EAST + STOCKROOM gets you to the elevator key.")
+			hud.set_objective("Use the power board: EAST + STOCKROOM gets you to the elevator key." if Game.fixed_layout
+				else "Power board: switch on the EAST showroom and STOCKROOM for the elevator key. The switches lost their labels - find out which is which.")
 			hud.say("ai", "Only emergency lights in the hall. Something here hunts by sound, as always.")
 		"EAST SHOWROOM":
 			if not power["EAST"]:
