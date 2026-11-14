@@ -845,6 +845,62 @@ func _ready() -> void:
 		await wait(0.2)
 	check(s3_ok, "S3: 5 random relay layouts - no receiver lit at the start, and every lab can be solved")
 	check(recv_sets.size() >= 2, "S3: the receivers move between games")
+	var s4_ok := true
+	var s4_layouts: Dictionary = {}
+	for run in 4:
+		s = load("res://scenes/sector_4.tscn").instantiate()
+		add_child(s)
+		await wait(0.4)
+		s.listener.set_physics_process(false)
+		var why := ""
+		if s.lasers.size() != 3 or s.cameras.size() != 2:
+			why = "counts %d lasers %d cameras" % [s.lasers.size(), s.cameras.size()]
+		var cp4 := Vector2i(-1, -1)
+		var wing_x: Array = []
+		for c in s.lasers:
+			if s.room_at(c) == "CHECKPOINT":
+				cp4 = c
+			elif s.room_at(c) == "ELEVATOR WING":
+				wing_x.append(c.x)
+		var hall_cam := Vector2i(-1, -1)
+		var wing_cam := {}
+		for cam4 in s.cameras:
+			if s.room_at(cam4["cell"]) == "CAMERA HALL":
+				hall_cam = cam4["cell"]
+			elif s.room_at(cam4["cell"]) == "ELEVATOR WING":
+				wing_cam = cam4
+		s4_layouts["%s %s %s" % [cp4, hall_cam, wing_x]] = true
+		if cp4.x < 0 or hall_cam.x < 0 or wing_cam.is_empty() or wing_x.size() != 2 or wing_x[0] != wing_x[1]:
+			why = "layout: checkpoint %s hall cam %s wing grid %s" % [cp4, hall_cam, wing_x]
+		elif absi(wing_cam["cell"].x - wing_x[0]) < 4:
+			why = "wing camera too close to the grid"
+		elif not s._hall_connected(s.room_rect("CAMERA HALL")):
+			why = "camera hall not walkable end to end"
+		else:
+			# Solve it: a jammer from the hall side on the checkpoint grid ...
+			var hj = s.jammers[0]
+			var cj = s.jammers[1]
+			s._put(hj, cp4 + Vector2i(0, 1) if cp4.y < 6 else Vector2i(8, 7))
+			s._update_jamming()
+			if s.lasers[cp4]["on"]:
+				why = "a jammer from the hall side can't reach the checkpoint grid"
+			# ... then one on the wing's grid and one by its camera.
+			var wc: Vector2i = wing_cam["cell"]
+			s._put(hj, Vector2i(wing_x[0] + 1, 15))
+			s._put(cj, wc + Vector2i(-1, 0))
+			s._update_jamming()
+			for c in s.lasers:
+				if s.room_at(c) == "ELEVATOR WING" and s.lasers[c]["on"]:
+					why = "the wing grid stays on"
+			if wing_cam["on"]:
+				why = "the wing camera stays on"
+		if why != "":
+			s4_ok = false
+			print("  S4 run %d: %s" % [run, why])
+		s.queue_free()
+		await wait(0.2)
+	check(s4_ok, "S4: 4 random security layouts - every one can be passed with the two jammers")
+	check(s4_layouts.size() >= 2, "S4: the lasers and cameras move between games")
 	var s5_ok := true
 	for run in 3:
 		s = load("res://scenes/sector_5.tscn").instantiate()

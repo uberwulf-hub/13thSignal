@@ -83,8 +83,176 @@ func _scatter_chars() -> Array:
 	return ["j", "y"]   # the jammers and the shutter button
 
 
+## Each game the security layout changes too (the hand-made one is kept for tests):
+##  - the checkpoint laser sits on a different square of its corridor;
+##  - the camera hall's camera hangs on a different wall, and the pillars you
+##    hide behind move (the hall always stays walkable end to end);
+##  - the elevator wing's laser grid moves along the corridor and its camera
+##    swaps ends, always at least 4 squares apart, so one jammer can never
+##    cover both.
 func _setup_puzzles() -> void:
-	pass
+	if Game.fixed_layout:
+		return
+	_move_checkpoint_laser()
+	_shuffle_camera_hall()
+	_shuffle_elevator_wing()
+
+
+func _move_checkpoint_laser() -> void:
+	var rect := room_rect("CHECKPOINT")
+	var cells: Array = []
+	for y in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x):
+			if ch(Vector2i(x, y)) in [".", "z"]:
+				cells.append(Vector2i(x, y))
+	for c in cells:
+		if ch(c) == "z":
+			_set_ch(c, ".")
+	_set_ch(cells[randi() % cells.size()], "z")
+
+
+func _shuffle_camera_hall() -> void:
+	var rect := room_rect("CAMERA HALL")
+	var original: Array = map.duplicate()
+	var entrances := _hall_doors(rect)
+	for attempt in 200:
+		map = original.duplicate()
+		var pillars := 0
+		for y in range(rect.position.y, rect.end.y):
+			for x in range(rect.position.x, rect.end.x):
+				var c := Vector2i(x, y)
+				if ch(c) == "#":
+					pillars += 1
+					_set_ch(c, ".")
+				elif ch(c) == "C":
+					_set_ch(c, ".")
+		# The camera: on a wall, well away from where you come in.
+		var cams: Array = []
+		for y in range(rect.position.y, rect.end.y):
+			for x in range(rect.position.x, rect.end.x):
+				var c := Vector2i(x, y)
+				if ch(c) != "." or not _on_outer_wall(c, rect) or not _clear_of(c, ["D", "f", "L", "i"]):
+					continue
+				var far := true
+				for e in entrances:
+					if absi(c.x - e.x) + absi(c.y - e.y) < 6:
+						far = false
+				if far:
+					cams.append(c)
+		if cams.is_empty():
+			continue
+		var cam: Vector2i = cams[randi() % cams.size()]
+		_set_ch(cam, "C")
+		# The pillars: inside the hall, not touching a door, the camera or each other.
+		var placed := 0
+		var spots: Array = []
+		for y in range(rect.position.y, rect.end.y):
+			for x in range(rect.position.x + 2, rect.end.x - 2):
+				spots.append(Vector2i(x, y))
+		spots.shuffle()
+		for c in spots:
+			if placed >= pillars:
+				break
+			if ch(c) == "." and _clear_of(c, ["D", "C", "f", "L", "i"]) and _no_pillar_near(c, rect):
+				_set_ch(c, "#")
+				placed += 1
+		if placed == pillars and _hall_connected(rect):
+			return
+	map = original
+
+
+func _shuffle_elevator_wing() -> void:
+	var rect := room_rect("ELEVATOR WING")
+	var cams: Array = []
+	var cols_ok: Array = []
+	for y in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x):
+			var c := Vector2i(x, y)
+			if ch(c) == "C":
+				_set_ch(c, ".")
+			elif ch(c) == "z":
+				_set_ch(c, ".")
+	# The camera at the far (east) end, top or bottom row.
+	var east := rect.end.x - 1
+	for y in range(rect.position.y, rect.end.y):
+		if ch(Vector2i(east, y)) == "." and _clear_of(Vector2i(east, y), ["D"]):
+			cams.append(Vector2i(east, y))
+	var cam: Vector2i = cams[randi() % cams.size()] if not cams.is_empty() else Vector2i(east, rect.end.y - 1)
+	_set_ch(cam, "C")
+	# The grid: a whole column of the corridor, clear of lockers and intercoms,
+	# between the elevator and the door you come in by, 4+ squares from the camera.
+	var doors_in := _hall_doors(rect)
+	for x in range(rect.position.x + 1, rect.end.x):
+		if cam.x - x < 4:
+			continue
+		var ok := true
+		for y in range(rect.position.y, rect.end.y):
+			if ch(Vector2i(x, y)) != "." or not _clear_of(Vector2i(x, y), ["L", "i", "X", "f"]):
+				ok = false
+		for e in doors_in:
+			if x >= e.x:
+				ok = false   # the grid must be between you and the elevator
+		if ok:
+			cols_ok.append(x)
+	var gx: int = cols_ok[randi() % cols_ok.size()] if not cols_ok.is_empty() else 20
+	for y in range(rect.position.y, rect.end.y):
+		_set_ch(Vector2i(gx, y), "z")
+
+
+## Door squares just outside a room (where you come in or go out).
+func _hall_doors(rect: Rect2i) -> Array:
+	var out: Array = []
+	for y in range(rect.position.y - 1, rect.end.y + 1):
+		for x in range(rect.position.x - 1, rect.end.x + 1):
+			var c := Vector2i(x, y)
+			if not rect.has_point(c) and ch(c) == "D":
+				out.append(c)
+	return out
+
+
+func _on_outer_wall(c: Vector2i, rect: Rect2i) -> bool:
+	for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+		if not rect.has_point(c + d) and ch(c + d) == "#":
+			return true
+	return false
+
+
+func _clear_of(c: Vector2i, chars: Array) -> bool:
+	for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+		if ch(c + d) in chars:
+			return false
+	return true
+
+
+## No other pillar in the 8 squares around (inside the hall).
+func _no_pillar_near(c: Vector2i, rect: Rect2i) -> bool:
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			var n := c + Vector2i(dx, dy)
+			if n != c and rect.has_point(n) and ch(n) == "#":
+				return false
+	return true
+
+
+## Every open square of the hall can be walked to from every other one.
+func _hall_connected(rect: Rect2i) -> bool:
+	var open: Array = []
+	for y in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x):
+			if ch(Vector2i(x, y)) != "#":
+				open.append(Vector2i(x, y))
+	if open.is_empty():
+		return false
+	var seen: Dictionary = {open[0]: true}
+	var todo: Array = [open[0]]
+	while not todo.is_empty():
+		var c: Vector2i = todo.pop_back()
+		for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+			var n: Vector2i = c + d
+			if rect.has_point(n) and not seen.has(n) and ch(n) != "#":
+				seen[n] = true
+				todo.append(n)
+	return seen.size() == open.size()
 
 
 func _solid_chars() -> Array:

@@ -88,7 +88,7 @@ MERIDIAN at all.
 - **Sector 1:** the breaker order and the note's clues to it, the elevator code, which colour is painted where, and where the keycard and the note are.
 - **Sector 2:** which vault holds the drive, and where the fuse is.
 - **Sector 3:** where the receivers are, so every relay lab needs a new answer. Each layout is checked by a solver before you get it, so it can always be solved with the lab's relays.
-- **Sector 4:** where the jammers and the shutter button are.
+- **Sector 4:** where the jammers and the shutter button are, which square the checkpoint laser is on, where the camera hall's camera and pillars are, and where the elevator wing's laser grid and camera are (always far enough apart that you need both jammers).
 - **Sector 5:** where the pressure plates are. Each one always stays far enough from its door that you need your copy.
 - **Sector 6:** which switch on the power board runs which circuit (the labels are missing), and where the elevator key is.
 
