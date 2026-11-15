@@ -78,6 +78,12 @@ func _configure() -> void:
 	echo_enabled = true
 
 
+## (The laser grids move after the monsters are placed: keep them out of the
+## rooms the grids cut in two.)
+func _no_spawn_rooms() -> Array:
+	return no_wander_rooms + ["CHECKPOINT", "ELEVATOR WING", "ARMORY"]
+
+
 ## Key items that move to a random spot in their room each game.
 func _scatter_chars() -> Array:
 	return ["j", "y"]   # the jammers and the shutter button

@@ -94,6 +94,8 @@ MERIDIAN at all.
 
 Items always stay in the same room, so the way through still works.
 
+**The monsters start somewhere new each game, too.** The Listener (and Sector 1's mannequin) start in a random room, always far from where you start, never in your starting room, a safe room or a lab, and always somewhere they could walk to you from.
+
 **Sector 1's puzzles:**
 1. Find the maintenance note. It tells you the breaker order.
 2. Find the security keycard and open SECURITY, the orange door off the main hall.

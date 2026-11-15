@@ -105,6 +105,10 @@ func _configure() -> void:
 	echo_enabled = true
 
 
+func _no_spawn_rooms() -> Array:
+	return no_wander_rooms + LABS
+
+
 ## Key items that move to a random spot in their room each game.
 func _scatter_chars() -> Array:
 	return []   # the relays and receivers move in _setup_puzzles

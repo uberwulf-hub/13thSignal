@@ -901,6 +901,33 @@ func _ready() -> void:
 		await wait(0.2)
 	check(s4_ok, "S4: 4 random security layouts - every one can be passed with the two jammers")
 	check(s4_layouts.size() >= 2, "S4: the lasers and cameras move between games")
+	# The monsters start somewhere new each game: far from you, never in your room.
+	var spawn_ok := true
+	var listener_spots: Dictionary = {}
+	for scene in ["sector", "sector", "sector", "sector_2", "sector_3", "sector_4", "sector_5", "sector_6"]:
+		s = load("res://scenes/%s.tscn" % scene).instantiate()
+		add_child(s)
+		await wait(0.3)
+		s.listener.set_physics_process(false)
+		var lc: Vector2i = s.world_to_cell(s.listener_home)
+		if scene == "sector":
+			listener_spots[lc] = true
+		var bad := ""
+		if s.room_at(lc) == s.room_at(s.start_cell) or s.room_at(lc) in s._no_spawn_rooms():
+			bad = "Listener in room %s" % s.room_at(lc)
+		elif s.find_path(s.cell_to_world(s.start_cell), s.listener_home).size() < 10:
+			bad = "Listener too close or unreachable (%d steps)" % s.find_path(s.cell_to_world(s.start_cell), s.listener_home).size()
+		if s.has_replacement:
+			var rc: Vector2i = s.world_to_cell(s.replacement_home)
+			if s.room_at(rc) == s.room_at(s.start_cell) or s.room_at(rc) == s.room_at(lc):
+				bad = "Replacement in room %s" % s.room_at(rc)
+		if bad != "":
+			spawn_ok = false
+			print("  %s: %s" % [scene, bad])
+		s.queue_free()
+		await wait(0.2)
+	check(spawn_ok, "monsters start far from you, never in your room, a safe room or a lab (all 6 sectors)")
+	check(listener_spots.size() >= 2, "the Listener starts somewhere different between games")
 	var s5_ok := true
 	for run in 3:
 		s = load("res://scenes/sector_5.tscn").instantiate()

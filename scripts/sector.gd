@@ -176,6 +176,7 @@ func _ready() -> void:
 	map = map.duplicate()
 	if not Game.fixed_layout:
 		_scatter_in_room(_scatter_chars())
+		_place_monsters()
 	_setup_puzzles()
 	_build_environment()
 	_build_level()
@@ -303,6 +304,66 @@ func _scatter_in_room(chars: Array) -> void:
 			var under := ch(to)
 			_set_ch(cell, under)   # swap, so a grate floor stays a grate floor
 			_set_ch(to, k)
+
+
+## SECTOR HOOK: rooms a monster must never start in (safe rooms, labs).
+func _no_spawn_rooms() -> Array:
+	return no_wander_rooms
+
+
+## The monsters start somewhere different every game: the Listener (M) and
+## the Replacement (R) each pick a random square they could walk to you
+## from, far from where you start (14+ squares' walk for the Listener, 10+
+## for the Replacement), never in your starting room, a safe room or a lab,
+## and not in the same room as each other.
+func _place_monsters() -> void:
+	var start := Vector2i(-1, -1)
+	for r in rows:
+		for c in cols:
+			if ch(Vector2i(c, r)) == "P":
+				start = Vector2i(c, r)
+	if start.x < 0:
+		return
+	var solid := _solid_chars()
+	var dist: Dictionary = {start: 0}
+	var todo: Array[Vector2i] = [start]
+	var i := 0
+	while i < todo.size():
+		var cur: Vector2i = todo[i]
+		i += 1
+		for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+			var n: Vector2i = cur + d
+			if dist.has(n) or n.x < 0 or n.y < 0 or n.y >= rows or n.x >= cols:
+				continue
+			var k := ch(n)
+			if k in solid and k != "D":
+				continue
+			dist[n] = dist[cur] + 1
+			todo.append(n)
+	var start_room := room_at(start)
+	var banned := _no_spawn_rooms()
+	var used_room := ""
+	for pair in [["M", 14], ["R", 10]]:
+		var who: String = pair[0]
+		var old := Vector2i(-1, -1)
+		for r in rows:
+			for c in cols:
+				if ch(Vector2i(c, r)) == who:
+					old = Vector2i(c, r)
+		if old.x < 0:
+			continue
+		var spots: Array = []
+		for cell in dist:
+			var room := room_at(cell)
+			if ch(cell) == "." and int(dist[cell]) >= int(pair[1]) and room != start_room and room != used_room \
+					and not room in banned and _scatter_ok(cell):
+				spots.append(cell)
+		if spots.is_empty():
+			continue
+		var to: Vector2i = spots[randi() % spots.size()]
+		_set_ch(old, ".")
+		_set_ch(to, who)
+		used_room = room_at(to)
 
 
 ## A free spot: its four neighbours are plain floor, walls, grates or lockers

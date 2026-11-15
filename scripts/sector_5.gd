@@ -101,6 +101,10 @@ func _configure() -> void:
 	echo_enabled = true
 
 
+func _no_spawn_rooms() -> Array:
+	return no_wander_rooms + SHIELDED
+
+
 ## Key items that move to a random spot in their room each game.
 func _scatter_chars() -> Array:
 	return []   # the plates move in _setup_puzzles (each must stay far from its door)
