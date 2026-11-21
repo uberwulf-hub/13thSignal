@@ -232,6 +232,7 @@ func _cycle_mode() -> void:
 func _start(scene: String) -> void:
 	Sound.stop_ambient()
 	Game.carried = {}   # a fresh start from the menu: empty pockets
+	Game.run_clues = {}
 	get_tree().change_scene_to_file(scene)
 
 

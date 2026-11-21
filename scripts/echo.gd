@@ -263,6 +263,9 @@ func _physics_process(delta: float) -> void:
 			sector.hud.say("you", YOUR_LINES[randi() % YOUR_LINES.size()])
 		else:
 			sector.hud.say("echo", VOICE_LINES[randi() % VOICE_LINES.size()])
+			if sector.sector_id >= 5:
+				# By now it has learned the relays' three notes too, and hums them.
+				Sound.play_at("motif_breath", global_position + Vector3(0, 1.6, 0), -8.0 if Game.is_explorer() else -3.0)
 
 	# Caught up with you?
 	if dist < 1.1 and not player.hidden_in and not player.frozen:

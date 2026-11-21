@@ -188,6 +188,7 @@ func _ready() -> void:
 	add_child(hud)
 	_spawn_actors()
 	_spawn_loot()
+	_spawn_clue13()
 	dread = preload("res://scripts/dread.gd").new().setup(self)
 	add_child(dread)
 	# Whatever you carried out of the last sector comes with you.
@@ -308,6 +309,107 @@ func _scatter_in_room(chars: Array) -> void:
 			var under := ch(to)
 			_set_ch(cell, under)   # swap, so a grate floor stays a grate floor
 			_set_ch(to, k)
+
+
+# ============================================================ the story
+
+## One record about the 13th sector is hidden in every sector, somewhere new
+## each game. Find them all and the ending changes.
+const CLUE13 := {
+	1: ["MAINTENANCE LOG - ROUTE 13", "\"Route 13 sealed by directive. Remove it from every map. Do not discuss it on open channels. Do not answer it if it calls.\""],
+	2: ["ARCHIVE INDEX CARD", "SECTOR 13 - RECORDS HELD: 0\nRECORDS REMOVED: 1,204\nREMOVED BY: (this line has been scratched out)"],
+	3: ["RELAY STATION LOG", "\"Request: point every relay DOWN. Requested by: SECTOR 13. Note: Sector 13 does not exist. Request granted anyway. Nobody remembers granting it.\""],
+	4: ["CAMERA INVENTORY", "CAM 1-12: online.\nCAM 13: online. Location: NOT FOUND.\nThe feed shows a corridor we never built. Someone is standing at the end of it."],
+	5: ["STAFF ROSTER (TAPE LABEL)", "Names on the roster: 13.\nFaces in the staff photo: 12.\nVoices on this tape: 13.\nOne of them is yours."],
+	6: ["SHOWROOM INVENTORY", "Mannequins ordered: 40. Delivered: 41.\nOne was sent back to Sector 13 for 'calibration'.\nIt came back. It is still here. It knows which one it is."],
+}
+
+var _clue_obj: Node3D
+
+
+## MERIDIAN changes as you go down. Sectors 1-2: calm and procedural.
+## 3-4: it pauses, and corrects itself. 5: it starts using ECHO's words
+## (not in Explorer). 6: it admits its map is incomplete (see Sector 6).
+func meridian_voice(text: String) -> String:
+	match sector_id:
+		3, 4:
+			if randf() < 0.35:
+				return ["...", "... ", "......"][randi() % 3] + text
+			if randf() < 0.2:
+				return text + " ...Correction. That is correct."
+		5:
+			if not Game.is_explorer() and randf() < 0.3:
+				return text + " " + ["Turn around.", "It's only me.", "Wait for me.", "Go back the way you came."][randi() % 4]
+			if randf() < 0.35:
+				return "... " + text
+	return text
+
+
+func _spawn_clue13() -> void:
+	if not CLUE13.has(sector_id):
+		return
+	# Anywhere you can reach, away from where you start.
+	var reach: Dictionary = {start_cell: true}
+	var todo: Array[Vector2i] = [start_cell]
+	while not todo.is_empty():
+		var at: Vector2i = todo.pop_back()
+		for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+			var nb: Vector2i = at + d
+			if not reach.has(nb) and not ch(nb) in ["#", "w", "Q", "O", "W", "Z", "T", "S", "z", "H", "G", "V"]:
+				reach[nb] = true
+				todo.append(nb)
+	var spots: Array = []
+	for cell in reach:
+		var room := room_at(cell)
+		if ch(cell) == "." and room != room_at(start_cell) and not room in _no_spawn_rooms() and _scatter_ok(cell) and not grates.has(cell):
+			spots.append(cell)
+	if spots.is_empty():
+		return
+	var cell: Vector2i = spots[randi() % spots.size()]
+	var p := cell_to_world(cell)
+	var crate := _box(Vector3(0.7, 0.5, 0.5), p + Vector3(0, 0.25, 0), _mat(Color(0.22, 0.18, 0.13), 0.8))
+	crate.rotation.y = randf() * TAU
+	var it := Interactable.new()
+	it.position = p + Vector3(0, 0.52, 0)
+	add_child(it)
+	_box(Vector3(0.3, 0.02, 0.4), Vector3.ZERO, _mat(Color(0.55, 0.45, 0.3), 0.7), it)
+	_box(Vector3(0.06, 0.025, 0.1), Vector3(0.12, 0.005, -0.15), _glow(Color(0.8, 0.1, 0.08), 1.2), it)
+	_shape_for(it, Vector3(0.5, 0.3, 0.5))
+	var info: Array = CLUE13[sector_id]
+	it.prompt_text = "Read the record"
+	it.on_use = func():
+		Sound.play("click", -6.0)
+		hud.show_note(info[0], info[1])
+		hud.add_clue("Sector 13 - %s: %s" % [info[0], String(info[1]).replace("\n", " ")])
+		if not Game.run_clues.has(sector_id):
+			Game.run_clues[sector_id] = true
+			hud.toast("A record about SECTOR 13 (%d found this run)" % clue_count(), 3.0)
+	_clue_obj = it
+
+
+func clue_count() -> int:
+	var n := 0
+	for k in Game.run_clues:
+		if int(k) <= 6:
+			n += 1
+	return n
+
+
+## SECTOR HOOKS for the ending cutscene.
+## Calm: steady cab lights instead of failing ones.
+func _cutscene_calm() -> bool:
+	return false
+
+
+## A message on the elevator's display as the doors close ("" = none).
+func _cutscene_display() -> String:
+	return ""
+
+
+## After the doors close: the run's signature tone (the last sector plays it
+## with a note missing).
+func _cutscene_after_doors() -> void:
+	Sound.play("motif_relay", -16.0)
 
 
 ## SECTOR HOOK: each sector's lighting has its own colour and rhythm.
@@ -1583,6 +1685,8 @@ func _flip_breaker(side: String, it: Node) -> void:
 
 
 func _power_on() -> void:
+	# The run's signature: three notes, first heard in the relays.
+	get_tree().create_timer(1.8).timeout.connect(func(): Sound.play("motif_relay", -9.0))
 	power_on = true
 	Sound.play("power_on", 0.0)
 	for l in lights:
@@ -2279,7 +2383,28 @@ func _elevator_cutscene(done: Callable) -> void:
 	await get_tree().create_timer(0.5).timeout
 	if not is_inside_tree():
 		return
+	var shown := _cutscene_display()
+	if shown != "":
+		exit_door.set_display(shown, Color(1.0, 0.35, 0.2) if "13" in shown else Color(0.5, 1.0, 0.6))
 	exit_door.close_elevator(3.2)
+	if _cutscene_calm():
+		# Steady, warm cab light all the way down: a calm exit.
+		await get_tree().create_timer(3.4).timeout
+		if not is_inside_tree():
+			return
+		if is_instance_valid(hum):
+			hum.stop()
+		hud.fade_out(2.0, func(): pass)
+		await get_tree().create_timer(2.2).timeout
+		if not is_inside_tree():
+			return
+		_cutscene_after_doors()
+		await get_tree().create_timer(1.6).timeout
+		if not is_inside_tree():
+			return
+		hud.cinematic(false)
+		done.call()
+		return
 	# The lights inside start to fail as the doors close.
 	var cab_lights: Array = []
 	for l in lights:
@@ -2311,7 +2436,11 @@ func _elevator_cutscene(done: Callable) -> void:
 	if is_instance_valid(hum):
 		hum.stop()
 	Sound.play("elevator_drop", -6.0)
-	await get_tree().create_timer(0.8).timeout
+	await get_tree().create_timer(0.9).timeout
+	if not is_inside_tree():
+		return
+	_cutscene_after_doors()
+	await get_tree().create_timer(1.6).timeout
 	if not is_inside_tree():
 		return
 	hud.cinematic(false)

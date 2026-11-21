@@ -389,6 +389,8 @@ func toast(text: String, seconds := 3.5) -> void:
 ## Queue an intercom line. style: "ai" (MERIDIAN), "echo" (something pretending
 ## to be MERIDIAN), "unknown" (something else entirely).
 func say(style: String, text: String) -> void:
+	if style == "ai" and sector and sector.has_method("meridian_voice"):
+		text = sector.meridian_voice(text)
 	_lines.append([style, text])
 
 

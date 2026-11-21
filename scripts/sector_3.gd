@@ -618,6 +618,7 @@ func _lab_blackout(lab: String) -> void:
 	for lamp in receiver_lamps.values():
 		(lamp as StandardMaterial3D).emission_energy_multiplier = 0.0
 	Sound.play("relay_thump", -2.0)
+	get_tree().create_timer(0.9).timeout.connect(func(): Sound.play("motif_relay", -8.0))
 	await get_tree().create_timer(0.7).timeout
 	if not is_inside_tree():
 		return

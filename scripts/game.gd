@@ -106,6 +106,9 @@ var theme: Theme
 ## Items you carried out of the last sector, for the next one: {"sector": n, "items": [...]}.
 ## Kept if you're caught and retry that sector; cleared when you go back to the menu.
 var carried: Dictionary = {}
+## The 13th-sector records found this run (sector id -> true), plus 13 for the
+## map at the end. A run starts when you start a sector from the menu.
+var run_clues: Dictionary = {}
 
 
 func carry_items(to_sector: int, items: Array) -> void:

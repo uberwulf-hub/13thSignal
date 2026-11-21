@@ -372,6 +372,12 @@ func _generate() -> void:
 			tap[at4 + i] += tap2[i] * 0.7
 	_streams["pipe_tap"] = _wav(_normalize(tap, 0.8))
 	# A relay room going dark for one beat: a deep, felt thump.
+	# The run's signature: three notes (G, B-flat, F-sharp), in different voices.
+	var motif := [392.0, 466.16, 369.99]
+	_streams["motif_relay"] = _wav(_motif(motif, "relay"))
+	_streams["motif_breath"] = _wav(_motif(motif, "breath"))
+	_streams["motif_box"] = _wav(_motif(motif, "box"))
+	_streams["motif_broken"] = _wav(_motif([392.0, 0.0, 369.99], "relay"))   # one note missing
 	_streams["relay_thump"] = _wav(_strike(1.2, 0.01, 0.2, [[42.0, 4.0, 1.0], [84.0, 6.0, 0.5], [130.0, 9.0, 0.25]], 0.3))
 
 	# A signal fragment's hum: low tones a little out of tune with each other,
@@ -894,6 +900,38 @@ func _listener_loom() -> PackedFloat32Array:
 		for j in click.size():
 			if at + j < a.size():
 				a[at + j] += click[j] * 0.35
+	return _normalize(a, 0.7)
+
+
+## The three-note motif in a given voice. A 0 Hz note is a silent gap.
+## relay: a clean, humming electronic tone. breath: the notes sung by
+## breathy noise (ECHO humming it). box: a tiny music box.
+func _motif(notes: Array, voice: String) -> PackedFloat32Array:
+	var step := 0.55
+	var a := _buf(step * notes.size() + 1.2)
+	for n in notes.size():
+		var f: float = notes[n]
+		if f <= 0.0:
+			continue
+		var start := int(n * step * RATE)
+		var part: PackedFloat32Array
+		match voice:
+			"box":
+				part = _strike(1.2, 0.001, 0.9, [[f * 2.0, 5.0, 1.0], [f * 4.02, 9.0, 0.35], [f * 6.1, 14.0, 0.15]], 0.02)
+			"breath":
+				var nz := _noise(0.9, 0.9, 1.6, 0.6, 0.12)
+				part = _buf(0.9)
+				_add(part, _reso(nz, f, 18.0), 0.05)
+				_add(part, _reso(nz, f * 2.0, 22.0), 0.02)
+			_:
+				part = _buf(0.75)
+				for i in part.size():
+					var t := float(i) / RATE
+					var env := minf(t / 0.02, 1.0) * exp(-t * 3.0)
+					part[i] = (sin(TAU * f * t) * 0.6 + sin(TAU * f * 2.0 * t) * 0.15 + sin(TAU * f * 3.0 * t) * 0.06) * env * (0.85 + 0.15 * sin(TAU * 6.0 * t))
+		for i in part.size():
+			if start + i < a.size():
+				a[start + i] += part[i]
 	return _normalize(a, 0.7)
 
 

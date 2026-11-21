@@ -1008,6 +1008,40 @@ func _ready() -> void:
 	await wait(0.3)
 	Game.mode = Game.Mode.EXPLORER
 
+	# --- The story: Sector 13 records, MERIDIAN's arc, the final choice ---
+	Game.mode = Game.Mode.SURVIVOR
+	Game.run_clues = {}
+	var clue_ok := true
+	for sc in ["sector", "sector_2", "sector_3", "sector_4", "sector_5", "sector_6"]:
+		s = load("res://scenes/%s.tscn" % sc).instantiate()
+		add_child(s)
+		await wait(0.4)
+		s.listener.set_physics_process(false)
+		if s._clue_obj == null:
+			clue_ok = false
+			print("  no Sector 13 record in ", sc)
+		else:
+			s._clue_obj.on_use.call()
+		if sc != "sector_6":
+			s.queue_free()
+			await wait(0.2)
+	check(clue_ok and Game.run_clues.size() == 6, "every sector hides one record about Sector 13, and the run counts them (%d)" % Game.run_clues.size())
+	check(s.meridian_voice("Hello.").length() >= 6, "MERIDIAN still speaks")
+	s.choose_final("map")
+	check(Game.run_clues.has(13) and s._end_story().contains("thirteen sectors"), "powering the route map shows a 13th sector, and changes MERIDIAN's last line")
+	check(s._cutscene_display().contains("INCOMPLETE"), "with 4+ records found, the elevator says the route is incomplete")
+	s.choose_final("lights")
+	check(s._cutscene_calm() and s._end_story().contains("safe trip"), "choosing the cab lights gives a calm ride down instead")
+	s.ended = true
+	var calm_done := [false]
+	s._elevator_cutscene(func(): calm_done[0] = true)
+	await wait(14.0)
+	check(calm_done[0], "the calm ending plays all the way through")
+	s.queue_free()
+	await wait(0.3)
+	Game.mode = Game.Mode.EXPLORER
+	Game.run_clues = {}
+
 	Game.lock_scary_modes()
 	print("\n%s (%d failed)" % ["ALL PASSED" if failures == 0 else "SOME TESTS FAILED", failures])
 	get_tree().quit(1 if failures > 0 else 0)

@@ -79,6 +79,8 @@ var _blackout_board := 0.0
 var board_order: Array = CIRCUITS.duplicate()
 var circuit_known: Dictionary = {}     # circuit -> true once you've seen what it powers
 var _switch_labels: Dictionary = {}
+var final_choice := ""                 # "map" or "lights": the console by the elevator
+var _choice_label: Label3D
 var props: Array = []                  # the prop mannequins (they never walk... mostly)
 var _nudge_t := 3.0
 var _turned_once := false    # circuit -> Label3D under its switch
@@ -370,6 +372,7 @@ func _check_clues() -> void:
 
 func _intro() -> void:
 	_apply_power()
+	_spawn_final_console()
 	hud.set_objective("Find the power board in the main hall.")
 	hud.add_clue("The power board carries only 2 circuits at once. A third overloads it.")
 	hud.add_clue("Mannequins can't move in a lit room. In the dark, they move when you look away.")
@@ -377,6 +380,7 @@ func _intro() -> void:
 	hud.say("ai", "Sector 6: the showroom. This is where they tested the Replacement.")
 	hud.say("ai", "There are dozens of mannequins down here. Most of them are only mannequins.")
 	hud.say("ai", "They cannot move in the light. The power board can carry two circuits at a time. Choose carefully.")
+	hud.say("ai", "...One more thing. My map of this facility is incomplete. I do not know why.")
 	hud.say("unknown", "...which one of us moved?")
 
 
@@ -415,6 +419,8 @@ func _haunt_props(delta: float) -> void:
 
 func _props_face_you() -> void:
 	var cam: Camera3D = player.cam
+	if not props.is_empty():
+		Sound.play_at("motif_box", props[randi() % props.size()].global_position + Vector3(0, 1.2, 0), -10.0)
 	for m in props:
 		if is_instance_valid(m) and not cam.is_position_in_frustum(m.global_position + Vector3(0, 1.5, 0)):
 			var to: Vector3 = player.global_position - m.global_position
@@ -439,5 +445,95 @@ func _entered_room(room: String) -> void:
 
 
 func _end_story() -> String:
-	return ("As the elevator doors closed, every mannequin in the showroom was facing you.\n"
-		+ "You hadn't seen a single one of them move.\n\nSector 7 is waiting below.")
+	var base := ("As the elevator doors closed, every mannequin in the showroom was facing you.\n"
+		+ "You hadn't seen a single one of them move.")
+	var line := ""
+	match final_choice:
+		"map":
+			line = "MERIDIAN: \"The map is complete now. It has thirteen sectors. It always did.\""
+		"lights":
+			line = "MERIDIAN: \"Lights on. Have a safe trip down. I will see you there.\""
+		_:
+			line = "MERIDIAN: \"Goodbye. Please remain calm.\""
+	var clues := "Records about Sector 13 found this run: %d / 6" % clue_count()
+	if clue_count() >= 4:
+		clues += "\nYou know enough now. The 13th sector isn't missing from the map. It was cut out of it."
+	return base + "\n\n" + line + "\n\n" + clues + "\n\nSector 7 is waiting below."
+
+
+# ============================================================ the ending
+
+## Last choice, at a console by the elevator: one spare line of power. Light
+## the ROUTE MAP (it shows you something) or the CAB LIGHTS (a calm ride
+## down). Both get you out. You can change your mind until you step in.
+func _spawn_final_console() -> void:
+	if exit_door == null:
+		return
+	var spot := Vector2i(-1, -1)
+	for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+		var c: Vector2i = exit_door.cell + d
+		if ch(c) in [".", "L", "i"] and room_at(c) != "ELEVATOR":
+			spot = c
+	if spot.x < 0:
+		return
+	var toward: Vector3 = exit_door.global_position - cell_to_world(spot)
+	toward.y = 0.0
+	toward = toward.normalized()
+	var side := toward.cross(Vector3.UP)
+	var base := cell_to_world(spot) + side * 1.0 - toward * 0.3
+	var stand := _box(Vector3(0.7, 1.0, 0.45), base + Vector3(0, 0.5, 0), _mat(Color(0.2, 0.21, 0.22), 0.5, 0.6))
+	stand.rotation.y = atan2(toward.x, toward.z)
+	_choice_label = Label3D.new()
+	_choice_label.text = "ONE SPARE LINE\nROUTE MAP  /  CAB LIGHTS"
+	_choice_label.font_size = 26
+	_choice_label.pixel_size = 0.0035
+	_choice_label.modulate = Color(1.0, 0.85, 0.4)
+	_choice_label.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+	_choice_label.position = base + Vector3(0, 1.45, 0)
+	add_child(_choice_label)
+	for k in 2:
+		var choice: String = ["map", "lights"][k]
+		var it := Interactable.new()
+		it.position = base + side * (k - 0.5) * 0.32 + Vector3(0, 1.05, 0)
+		add_child(it)
+		_box(Vector3(0.14, 0.06, 0.14), Vector3.ZERO, _glow(Color(0.3, 0.7, 1.0) if k == 0 else Color(1.0, 0.85, 0.5), 1.5), it)
+		_shape_for(it, Vector3(0.3, 0.3, 0.3))
+		it.prompt_text = "Power the ROUTE MAP" if k == 0 else "Power the CAB LIGHTS"
+		it.on_use = func(): choose_final(choice)
+
+
+func choose_final(choice: String) -> void:
+	if ended:
+		return
+	final_choice = choice
+	Sound.play("breaker", -4.0)
+	if choice == "map":
+		_choice_label.text = "ROUTE MAP\nSECTORS 1 - 12  ...  13"
+		_choice_label.modulate = Color(0.5, 0.8, 1.0)
+		hud.toast("The map flickers on. There are thirteen sectors on it.", 3.5)
+		if not Game.run_clues.has(13):
+			Game.run_clues[13] = true
+			hud.add_clue("The route map by the elevator shows a 13th sector.")
+	else:
+		_choice_label.text = "CAB LIGHTS: ON"
+		_choice_label.modulate = Color(1.0, 0.85, 0.5)
+		hud.toast("The elevator's lights come on, steady and warm.", 3.0)
+
+
+## The cab lights choice gives a calm ride down: steady light, no flicker.
+func _cutscene_calm() -> bool:
+	return final_choice == "lights"
+
+
+## The elevator remembers your run.
+func _cutscene_display() -> String:
+	var route := "ROUTE 1-2-3-4-5-6"
+	if clue_count() >= 4 and not Game.is_explorer():
+		return route + "\nINCOMPLETE  [13]"
+	return route + "\nCOMPLETE"
+
+
+## After the doors close, the run's three notes play once more from the other
+## side... with one note missing. (Soft in Explorer.)
+func _cutscene_after_doors() -> void:
+	Sound.play("motif_broken", -16.0 if Game.is_explorer() else -8.0)
