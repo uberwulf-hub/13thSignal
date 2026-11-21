@@ -44,6 +44,8 @@ var _gasp_lock := 0.0
 var _step_t := 0.0
 var _noise_t := 0.0
 var _bob := 0.0
+var _breath_t := 0.0
+var _outer: SpotLight3D      # the flashlight's faint outer spill
 var _eye := 1.6
 var _exhausted := false
 
@@ -68,6 +70,15 @@ func _ready() -> void:
 	flashlight.spot_range = 20.0
 	flashlight.spot_angle = 26.0
 	flashlight.spot_attenuation = 0.8
+	flashlight.spot_angle_attenuation = 4.0   # a bright centre that fades softly at the edges
+	# A wide, faint outer spill around the beam (a child, so it switches with it).
+	_outer = SpotLight3D.new()
+	_outer.spot_angle = 50.0
+	_outer.spot_range = 9.0
+	_outer.spot_angle_attenuation = 2.0
+	_outer.light_energy = 0.3
+	_outer.light_color = Color(1.0, 0.95, 0.85)
+	flashlight.add_child(_outer)
 	flashlight.light_energy = 3.0
 	flashlight.light_color = Color(1.0, 0.95, 0.85)
 	flashlight.shadow_enabled = Game.gfx() >= 1
@@ -356,6 +367,11 @@ func _physics_process(delta: float) -> void:
 	_eye = lerpf(_eye, eye_target, minf(delta * 10.0, 1.0))
 	var bob_amt := 0.05 if sprinting else 0.025
 	cam.position.y = _eye + sin(_bob) * bob_amt * minf(hspeed, 1.0)
+	# Standing still, you breathe: a slow rise and fall, and a slight lean.
+	_breath_t += delta * (1.6 if stamina > 60.0 else 2.6)
+	var still := 1.0 - minf(hspeed / 0.6, 1.0)
+	cam.position.y += sin(_breath_t) * 0.008 * still
+	cam.rotation.z = sin(_breath_t * 0.5) * 0.004 * still
 
 	# What am I looking at?
 	if carrying:
@@ -396,7 +412,19 @@ func _update_battery(delta: float) -> void:
 		battery = maxf(battery - float(m["battery_drain"]) * delta, 0.0)
 		if battery <= 0.0:
 			flashlight.visible = false
-		flashlight.light_energy = 3.0 if battery > 15.0 else (3.0 if randf() > 0.1 else 0.4)
+		# A weak battery means a shorter, dimmer, yellower beam, and below 20%
+		# it starts to waver and drop out for a moment now and then.
+		var charge := clampf(battery / 60.0, 0.0, 1.0)
+		var energy := lerpf(1.5, 3.0, charge)
+		flashlight.spot_range = lerpf(11.0, 20.0, charge)
+		flashlight.light_color = Color(1.0, 0.95, 0.85).lerp(Color(1.0, 0.78, 0.5), 1.0 - charge)
+		if battery < 20.0:
+			energy *= 0.85 + 0.15 * sin(Time.get_ticks_msec() * 0.023)
+			if randf() < 0.05 * delta * 60.0 * (1.0 - battery / 20.0):
+				energy *= 0.2
+		flashlight.light_energy = energy
+		_outer.light_energy = energy * 0.1
+		_outer.light_color = flashlight.light_color
 	else:
 		battery = minf(battery + 0.9 * delta, 100.0)
 

@@ -89,6 +89,11 @@ func _configure() -> void:
 	echo_enabled = true
 
 
+# Archives: tired sodium-orange lamps that slowly swell and fade.
+func _light_mood() -> Dictionary:
+	return {"color": Color(1.0, 0.68, 0.35), "energy": 0.85, "rhythm": "breathe"}
+
+
 ## Key items that move to a random spot in their room each game.
 func _scatter_chars() -> Array:
 	return ["u"]   # the fuse

@@ -84,6 +84,11 @@ func _no_spawn_rooms() -> Array:
 	return no_wander_rooms + ["CHECKPOINT", "ELEVATOR WING", "ARMORY"]
 
 
+# Security: cold white light with a slow scanning wave down the halls.
+func _light_mood() -> Dictionary:
+	return {"color": Color(0.85, 0.93, 1.0), "energy": 1.1, "rhythm": "sweep"}
+
+
 ## Key items that move to a random spot in their room each game.
 func _scatter_chars() -> Array:
 	return ["j", "y"]   # the jammers and the shutter button

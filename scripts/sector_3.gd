@@ -109,6 +109,11 @@ func _no_spawn_rooms() -> Array:
 	return no_wander_rooms + LABS
 
 
+# Relay station: lights that drift between the beams' red and blue.
+func _light_mood() -> Dictionary:
+	return {"color": Color(0.6, 0.72, 1.0), "energy": 1.0, "rhythm": "pulse"}
+
+
 ## Key items that move to a random spot in their room each game.
 func _scatter_chars() -> Array:
 	return []   # the relays and receivers move in _setup_puzzles

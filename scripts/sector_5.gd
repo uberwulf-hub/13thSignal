@@ -105,6 +105,11 @@ func _no_spawn_rooms() -> Array:
 	return no_wander_rooms + SHIELDED
 
 
+# Playback lab: sickly green-teal, like old monitors.
+func _light_mood() -> Dictionary:
+	return {"color": Color(0.4, 1.0, 0.8), "energy": 0.8, "rhythm": "breathe"}
+
+
 ## Key items that move to a random spot in their room each game.
 func _scatter_chars() -> Array:
 	return []   # the plates move in _setup_puzzles (each must stay far from its door)

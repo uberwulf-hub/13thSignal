@@ -92,6 +92,11 @@ func _configure() -> void:
 	echo_enabled = false
 
 
+# Showroom: warm, sickly light that dies for a moment now and then.
+func _light_mood() -> Dictionary:
+	return {"color": Color(1.0, 0.85, 0.55), "energy": 1.0, "rhythm": "cutout"}
+
+
 ## Key items that move to a random spot in their room each game.
 ## (The power board's wiring is shuffled too: see _spawn_board.)
 func _scatter_chars() -> Array:

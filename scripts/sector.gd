@@ -306,6 +306,53 @@ func _scatter_in_room(chars: Array) -> void:
 			_set_ch(to, k)
 
 
+## SECTOR HOOK: each sector's lighting has its own colour and rhythm.
+##   color/energy: the ceiling lights' colour and brightness;
+##   rhythm: "flicker" (the odd stutter), "breathe" (slow swell and fade),
+##   "pulse" (lights drift between a red and a blue tint), "sweep" (a slow
+##   wave of brightness travelling down the halls), "cutout" (a light dies
+##   for a moment now and then).
+func _light_mood() -> Dictionary:
+	return {"color": Color(0.35, 0.5, 1.0), "energy": 1.0, "rhythm": "flicker"}
+
+
+## Apply the rhythm on top of whatever brightness the sector's own logic has
+## set (power coming on, circuits...): remember that as the light's target.
+func _update_light_mood() -> void:
+	var mood := _light_mood()
+	var rhythm: String = mood["rhythm"]
+	if rhythm == "flicker":
+		return
+	var t := Time.get_ticks_msec() / 1000.0
+	for l in lights:
+		var light: OmniLight3D = l["light"]
+		if not is_instance_valid(light) or l.get("off", false) or l["room"] == "ELEVATOR":
+			continue
+		if not l.has("target") or absf(light.light_energy - float(l.get("last_set", -1.0))) > 0.0005:
+			l["target"] = light.light_energy
+			l["tint"] = light.light_color
+		var x: float = light.position.x * 0.13 + light.position.z * 0.07
+		var f := 1.0
+		match rhythm:
+			"breathe":
+				f = 0.8 + 0.2 * sin(t * 1.2 + x * 3.0)
+			"pulse":
+				f = 0.85 + 0.15 * sin(t * 0.9 + x * 2.0)
+				var k := 0.5 + 0.5 * sin(t * 0.45 + x)
+				light.light_color = (l["tint"] as Color).lerp(Color(1.0, 0.3, 0.25), 0.25 * k).lerp(Color(0.3, 0.45, 1.0), 0.25 * (1.0 - k))
+			"sweep":
+				var wave := fmod(t * 0.25 - x * 0.15, 1.0)
+				f = 0.7 + 0.5 * exp(-pow((wave - 0.5) * 6.0, 2.0))
+			"cutout":
+				var until: float = l.get("dead_until", 0.0)
+				if t < until:
+					f = 0.0
+				elif randf() < 0.0015:
+					l["dead_until"] = t + randf_range(0.15, 0.6)
+		light.light_energy = float(l["target"]) * f
+		l["last_set"] = light.light_energy
+
+
 ## SECTOR HOOK: rooms a monster must never start in (safe rooms, labs).
 func _no_spawn_rooms() -> Array:
 	return no_wander_rooms
@@ -665,6 +712,8 @@ func _build_level() -> void:
 					_custom_cell(k, cell)
 	_build_rooms(stripe_mat)
 	_dress_elevator()
+	_dress_walls()
+	_add_dust()
 
 
 func _shape(body: StaticBody3D, size: Vector3, pos: Vector3) -> void:
@@ -710,12 +759,13 @@ func _build_rooms(stripe_mat: Material) -> void:
 			light.position = pos
 			light.omni_range = 8.0
 			light.omni_attenuation = 1.4
-			light.light_color = Color(0.35, 0.5, 1.0)
-			light.light_energy = 0.55 * light_mult
+			var mood := _light_mood()
+			light.light_color = mood["color"]
+			light.light_energy = 0.55 * light_mult * float(mood["energy"])
 			if room_name == "ELEVATOR":
 				light.light_color = Color(1.0, 0.85, 0.4)
 			add_child(light)
-			var fixture := _box(Vector3(1.2, 0.08, 0.3), pos + Vector3(0, 0.3, 0), _glow(Color(0.35, 0.5, 1.0), 1.5))
+			var fixture := _box(Vector3(1.2, 0.08, 0.3), pos + Vector3(0, 0.3, 0), _glow(light.light_color, 1.5))
 			lights.append({"light": light, "fixture": fixture, "flicker": randf() < 0.3, "mult": light_mult, "room": room_name})
 		# Pipes along the halls.
 		if room_name.ends_with("HALL"):
@@ -920,6 +970,206 @@ func room_rect(room_name: String) -> Rect2i:
 		if r[0] == room_name:
 			return r[1]
 	return Rect2i()
+
+
+## Make the halls look used, not empty: here and there along the walls,
+## cable conduits, vents, warning plates, recessed panels and standing pipes;
+## dirty water streaks down the walls, grime where the walls meet the floor,
+## and old stains on the floor. Different every game, and sparse, so the bare
+## stretches in between stay bare.
+func _dress_walls() -> void:
+	var steel := _mat(Color(0.42, 0.43, 0.45), 0.4, 0.8)
+	var dark := _mat(Color(0.08, 0.08, 0.09), 0.7, 0.3)
+	var panel := _mat(Color(0.2, 0.21, 0.22), 0.8, 0.2)
+	var plate := _mat(Color(0.75, 0.6, 0.1), 0.6, 0.3)
+	var streak_mat := _decal_mat(_streak_texture(), Color(0.05, 0.04, 0.025, 1.0))
+	var edge_mat := _decal_mat(_edge_texture(), Color(0.05, 0.045, 0.04, 0.8))
+	var stain_mat := _decal_mat(_stain_texture(), Color(0.07, 0.06, 0.045, 0.7))
+	var warnings := ["HIGH VOLTAGE", "AUTHORISED\nSTAFF ONLY", "SIGNAL HAZARD", "DO NOT\nENTER", "LISTEN.", "KEEP QUIET"]
+	for r in rows:
+		for c in cols:
+			var cell := Vector2i(c, r)
+			var k := ch(cell)
+			if k == "#" or room_at(cell) in ["ELEVATOR", ""]:
+				continue
+			var p := cell_to_world(cell)
+			# Old stains on the floor.
+			if k in [".", "L"] and randf() < 0.07:
+				var st := _flat_quad(Vector2(randf_range(1.0, 2.2), randf_range(1.0, 2.2)), stain_mat)
+				st.position = p + Vector3(randf_range(-0.6, 0.6), 0.012, randf_range(-0.6, 0.6))
+				st.rotation = Vector3(-PI / 2.0, 0, randf() * TAU)
+				add_child(st)
+			for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+				if ch(cell + d) != "#":
+					continue
+				var out := Vector3(d.x, 0, d.y)          # towards the wall
+				var face := p + out * (S / 2.0 - 0.01)
+				var along := Vector3(absf(out.z), 0, absf(out.x))
+				var yaw := atan2(-out.x, -out.z)          # facing back into the room
+				# Grime along the bottom of every wall.
+				var edge := _flat_quad(Vector2(S, 0.7), edge_mat)
+				edge.position = face - out * 0.35 + Vector3(0, 0.011, 0)
+				edge.rotation = Vector3(-PI / 2.0, yaw, 0)
+				add_child(edge)
+				var roll := randf()
+				if roll < 0.2:
+					# Dirty water running down from the ceiling.
+					var sk := _flat_quad(Vector2(randf_range(0.5, 1.4), randf_range(1.4, WALL_H - 0.2)), streak_mat)
+					sk.position = face - out * 0.012 + along * randf_range(-1.0, 1.0) + Vector3(0, WALL_H - sk.mesh.size.y / 2.0, 0)
+					sk.rotation.y = yaw
+					add_child(sk)
+				elif roll < 0.3:
+					# A cable conduit with a junction box.
+					var y := randf_range(2.2, 2.7)
+					var pipe := _box(along * S + Vector3(0, 0.07, 0) + Vector3(absf(out.x), 0, absf(out.z)) * 0.07, face - out * 0.05 + Vector3(0, y, 0), steel)
+					pipe.name = "Conduit"
+					_box(along * 0.3 + Vector3(0, 0.3, 0) + Vector3(absf(out.x), 0, absf(out.z)) * 0.12, face - out * 0.07 + along * randf_range(-0.9, 0.9) + Vector3(0, y - 0.1, 0), steel)
+				elif roll < 0.36:
+					# A vent: a dark grille, low or high.
+					var vy := 0.35 if randf() < 0.5 else 2.6
+					var vp := face - out * 0.03 + along * randf_range(-0.8, 0.8) + Vector3(0, vy, 0)
+					_box(along * 0.8 + Vector3(0, 0.4, 0) + Vector3(absf(out.x), 0, absf(out.z)) * 0.04, vp, dark)
+					for i in 4:
+						_box(along * 0.74 + Vector3(0, 0.025, 0) + Vector3(absf(out.x), 0, absf(out.z)) * 0.06, vp - out * 0.01 + Vector3(0, -0.15 + i * 0.1, 0), steel)
+				elif roll < 0.4:
+					# A warning plate.
+					var wp := face - out * 0.02 + along * randf_range(-0.8, 0.8) + Vector3(0, 1.55, 0)
+					_box(along * 0.55 + Vector3(0, 0.32, 0) + Vector3(absf(out.x), 0, absf(out.z)) * 0.02, wp, plate)
+					var l := Label3D.new()
+					l.text = warnings[randi() % warnings.size()]
+					l.font_size = 28
+					l.pixel_size = 0.0032
+					l.modulate = Color(0.08, 0.06, 0.02)
+					l.outline_size = 0
+					l.position = wp - out * 0.015
+					l.rotation.y = yaw
+					add_child(l)
+				elif roll < 0.48:
+					# A recessed service panel.
+					# (above the blue guide stripe, never covering it)
+					_box(along * randf_range(1.0, 1.6) + Vector3(0, 1.3, 0) + Vector3(absf(out.x), 0, absf(out.z)) * 0.03, face - out * 0.01 + Vector3(0, 1.95, 0), panel)
+				elif roll < 0.51:
+					# A standing pipe, floor to ceiling.
+					var vp2 := MeshInstance3D.new()
+					var cm := CylinderMesh.new()
+					cm.top_radius = 0.09
+					cm.bottom_radius = 0.09
+					cm.height = WALL_H
+					cm.radial_segments = 10
+					vp2.mesh = cm
+					vp2.material_override = steel
+					vp2.position = face - out * 0.12 + along * randf_range(-1.2, 1.2) + Vector3(0, WALL_H / 2.0, 0)
+					add_child(vp2)
+
+
+## A flat, see-through mark (grime, stains, streaks).
+func _decal_mat(tex: Texture2D, tint: Color) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = tex
+	m.albedo_color = tint
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.roughness = 0.9
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return m
+
+
+func _flat_quad(size: Vector2, mat: Material) -> MeshInstance3D:
+	var mi := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.size = size
+	mi.mesh = q
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
+
+
+## Streaks of dirty water: thin uneven runs, strongest at the top.
+static func _streak_texture() -> ImageTexture:
+	var w := 64
+	var h := 256
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 77
+	var runs: Array = []
+	for i in 9:
+		runs.append([rng.randf_range(4.0, w - 4.0), rng.randf_range(1.0, 3.5), rng.randf_range(0.3, 1.0), rng.randf_range(0.0, 6.0)])
+	for y in h:
+		var fy := float(y) / h
+		for x in w:
+			var a := 0.0
+			for r in runs:
+				var cx: float = r[0] + sin(fy * 9.0 + r[3]) * 2.0
+				var d := absf(x - cx)
+				if d < r[1] and fy < r[2]:
+					a = maxf(a, (1.0 - d / r[1]) * (1.0 - fy / r[2]) * 0.9)
+			a = maxf(a, (1.0 - fy) * 0.25 * (0.6 + 0.4 * sin(x * 0.4)))   # a stained top band
+			img.set_pixel(x, y, Color(1, 1, 1, clampf(a, 0.0, 1.0)))
+	return ImageTexture.create_from_image(img)
+
+
+## Grime where a wall meets the floor: dark at the wall, fading out.
+static func _edge_texture() -> ImageTexture:
+	var img := Image.create(64, 32, false, Image.FORMAT_RGBA8)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 78
+	for y in 32:
+		for x in 64:
+			var a := pow(1.0 - float(y) / 31.0, 2.2) * rng.randf_range(0.7, 1.0)   # dark at the wall
+			img.set_pixel(x, y, Color(1, 1, 1, a))
+	return ImageTexture.create_from_image(img)
+
+
+## An old stain: a soft, blotchy patch.
+static func _stain_texture() -> ImageTexture:
+	var n := 128
+	var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+	var noise := FastNoiseLite.new()
+	noise.seed = 79
+	noise.frequency = 0.05
+	for y in n:
+		for x in n:
+			var d := Vector2(x - n / 2.0, y - n / 2.0).length() / (n / 2.0)
+			var v := noise.get_noise_2d(x, y) * 0.5 + 0.5
+			var a := clampf((1.0 - d) * 1.6 - (1.0 - v) * 0.9, 0.0, 1.0)
+			img.set_pixel(x, y, Color(1, 1, 1, a * 0.85))
+	return ImageTexture.create_from_image(img)
+
+
+## Dust hanging in the air of every room: tiny specks that drift very slowly.
+## They aren't lit themselves, so you only see them in your flashlight beam
+## (or right under a lamp).
+func _add_dust() -> void:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.85, 0.82, 0.75, 0.6)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	mat.roughness = 1.0
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.018, 0.018)
+	var per_area := 0.9 if Game.gfx() >= 1 else 0.4
+	for room in rooms:
+		var name: String = room[0]
+		if name in ["CRAWLSPACE", "ELEVATOR"]:
+			continue
+		var rect: Rect2i = room[1]
+		var size := Vector3(rect.size.x * S, WALL_H - 0.4, rect.size.y * S)
+		var center := cell_to_world(rect.position) - Vector3(S / 2.0, 0, S / 2.0) + size / 2.0 + Vector3(0, 0.2, 0)
+		var dust := CPUParticles3D.new()
+		dust.amount = clampi(int(rect.size.x * rect.size.y * per_area * 4.0), 12, 90)
+		dust.lifetime = 14.0
+		dust.preprocess = 14.0
+		dust.mesh = quad
+		dust.material_override = mat
+		dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+		dust.emission_box_extents = size / 2.0
+		dust.gravity = Vector3(0, -0.004, 0)
+		dust.direction = Vector3(1, 0.2, 0)
+		dust.spread = 180.0
+		dust.initial_velocity_min = 0.01
+		dust.initial_velocity_max = 0.05
+		dust.position = center
+		dust.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(dust)
 
 
 ## Make the ELEVATOR room look like the inside of an old service elevator:
@@ -1807,6 +2057,7 @@ func _process(delta: float) -> void:
 				l["light"].visible = on
 				l["fixture"].visible = on
 
+	_update_light_mood()
 	_check_player_cell()
 	_update_dread()
 	_record_trail(delta)
