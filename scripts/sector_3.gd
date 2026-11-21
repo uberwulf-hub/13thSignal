@@ -604,7 +604,32 @@ func _check_labs() -> void:
 			_lab_solved(lab)
 
 
+## The moment a lab is solved, every light in it goes dark for one beat, with
+## a deep thump... and then comes back, as if nothing happened.
+func _lab_blackout(lab: String) -> void:
+	var lab_lights: Array = []
+	for l in lights:
+		if l["room"] == lab and l["light"].visible:
+			lab_lights.append(l)
+	for l in lab_lights:
+		l["dimmed"] = true
+		l["light"].visible = false
+		l["fixture"].visible = false
+	for lamp in receiver_lamps.values():
+		(lamp as StandardMaterial3D).emission_energy_multiplier = 0.0
+	Sound.play("relay_thump", -2.0)
+	await get_tree().create_timer(0.7).timeout
+	if not is_inside_tree():
+		return
+	for l in lab_lights:
+		l["dimmed"] = false
+		l["light"].visible = true
+		l["fixture"].visible = true
+	update_beams()
+
+
 func _lab_solved(lab: String) -> void:
+	_lab_blackout(lab)
 	Sound.play("key_ok", -2.0)
 	Sound.play("power_on", -6.0, 1.4)
 	if LAB_GATES.has(lab):

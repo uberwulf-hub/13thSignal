@@ -94,6 +94,13 @@ MERIDIAN at all.
 
 Items always stay in the same room, so the way through still works.
 
+**The facility notices you.** Run, or clang across a grate, and the nearest intercom answers with a clipped chime. Lights go out behind you one by one, and come back later. A room's name on the floor might read SECTOR 13 while you aren't looking. ECHO plays back your own footsteps from where you made them, plus one you didn't. In Survivor and Nightmare it gets worse:
+- The Listener goes silent as it closes in on a noise, then breathes close by.
+- You might hear footsteps where nobody is, then a pipe taps twice in the same spot. Learn the difference.
+- MERIDIAN might say something only ECHO has said.
+
+(Explorer keeps only the gentle, quiet ones.)
+
 **The monsters start somewhere new each game, too.** The Listener (and Sector 1's mannequin) start in a random room, always far from where you start, never in your starting room, a safe room or a lab, and always somewhere they could walk to you from.
 
 **Sector 1's puzzles:**

@@ -348,6 +348,31 @@ func _generate() -> void:
 	_set_variants("listener_snap", 4, func(): return _listener_snap())
 	_streams["body_fall"] = _wav(_body_fall())
 	_streams["listener_loom"] = _wav(_listener_loom())
+	# The building noticing you: a clipped two-note chime falling, then a relay click.
+	var chime := _strike(1.4, 0.002, 0.8, [[880.0, 4.0, 1.0], [1762.0, 6.0, 0.25]], 0.05)
+	var chime2 := _strike(1.2, 0.002, 0.8, [[659.0, 4.5, 1.0], [1320.0, 7.0, 0.2]], 0.05)
+	var at2 := int(0.32 * RATE)
+	for i in chime2.size():
+		if at2 + i < chime.size():
+			chime[at2 + i] += chime2[i]
+	var relay_click := _noise(0.03, 0.9, 150.0, 0.8)
+	var at3 := int(0.85 * RATE)
+	for i in relay_click.size():
+		if at3 + i < chime.size():
+			chime[at3 + i] += relay_click[i] * 0.6
+	for i in int(0.12 * RATE):   # clipped: it cuts off a little too soon
+		chime[chime.size() - 1 - i] = 0.0
+	_streams["facility_chime"] = _wav(_normalize(chime, 0.7))
+	# A loose pipe tapping twice: thin metal, ringing.
+	var tap := _strike(1.0, 0.0015, 0.9, [[1240.0, 9.0, 1.0], [2710.0, 14.0, 0.5], [3980.0, 20.0, 0.3]], 0.2)
+	var tap2 := _strike(0.8, 0.0015, 0.9, [[1240.0, 9.0, 1.0], [2710.0, 14.0, 0.5], [3980.0, 20.0, 0.3]], 0.2)
+	var at4 := int(0.28 * RATE)
+	for i in tap2.size():
+		if at4 + i < tap.size():
+			tap[at4 + i] += tap2[i] * 0.7
+	_streams["pipe_tap"] = _wav(_normalize(tap, 0.8))
+	# A relay room going dark for one beat: a deep, felt thump.
+	_streams["relay_thump"] = _wav(_strike(1.2, 0.01, 0.2, [[42.0, 4.0, 1.0], [84.0, 6.0, 0.5], [130.0, 9.0, 0.25]], 0.3))
 
 	# A signal fragment's hum: low tones a little out of tune with each other,
 	# beating slowly, with a faint high shimmer. Loops every 4 s.

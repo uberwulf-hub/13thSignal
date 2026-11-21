@@ -78,7 +78,10 @@ var _blackout_board := 0.0
 ## The labels fell off: it's different every game, and you find out by trying.
 var board_order: Array = CIRCUITS.duplicate()
 var circuit_known: Dictionary = {}     # circuit -> true once you've seen what it powers
-var _switch_labels: Dictionary = {}    # circuit -> Label3D under its switch
+var _switch_labels: Dictionary = {}
+var props: Array = []                  # the prop mannequins (they never walk... mostly)
+var _nudge_t := 3.0
+var _turned_once := false    # circuit -> Label3D under its switch
 
 
 func _configure() -> void:
@@ -122,6 +125,7 @@ func _custom_cell(k: String, cell: Vector2i) -> void:
 			m.position = p + Vector3(randf_range(-0.5, 0.5), 0, randf_range(-0.5, 0.5))
 			m.rotation.y = randf() * TAU
 			Replacement2.random_pose(m, false)
+			props.append(m)
 		"m":
 			_r_spots.append(cell)
 		"e", "s", "w":
@@ -218,6 +222,7 @@ func _spawn_actors() -> void:
 			m.position = cell_to_world(cell)
 			m.rotation.y = randf() * TAU
 			Replacement2.random_pose(m, false)
+			props.append(m)
 
 
 func _on_respawn() -> void:
@@ -379,6 +384,7 @@ func _process(delta: float) -> void:
 	super._process(delta)
 	if ended or player == null:
 		return
+	_haunt_props(delta)
 	if _blackout_board > 0.0:
 		_blackout_board -= delta
 		if _blackout_board <= 0.0:
@@ -387,7 +393,38 @@ func _process(delta: float) -> void:
 	_update_shutters()
 
 
+## The props don't walk. But look away and look back, and one of them has
+## turned its head a little. And once, after you've crossed into the
+## stockroom, every one you can't see turns to face you.
+func _haunt_props(delta: float) -> void:
+	_nudge_t -= delta
+	if _nudge_t > 0.0 or props.is_empty():
+		return
+	_nudge_t = randf_range(2.0, 5.0)
+	var cam: Camera3D = player.cam
+	var m: Node3D = props[randi() % props.size()]
+	if not is_instance_valid(m) or cam.is_position_in_frustum(m.global_position + Vector3(0, 1.5, 0)):
+		return
+	var head: Node3D = m.get_meta("head")
+	if head:
+		head.rotation.y = clampf(head.rotation.y + randf_range(-0.18, 0.18), -1.2, 1.2)
+		head.rotation.z = clampf(head.rotation.z + randf_range(-0.08, 0.08), -0.4, 0.4)
+	else:
+		m.rotation.y += randf_range(-0.12, 0.12)
+
+
+func _props_face_you() -> void:
+	var cam: Camera3D = player.cam
+	for m in props:
+		if is_instance_valid(m) and not cam.is_position_in_frustum(m.global_position + Vector3(0, 1.5, 0)):
+			var to: Vector3 = player.global_position - m.global_position
+			m.rotation.y = atan2(to.x, to.z)
+
+
 func _entered_room(room: String) -> void:
+	if room == "STOCKROOM" and not _turned_once:
+		_turned_once = true
+		get_tree().create_timer(2.0).timeout.connect(_props_face_you)
 	match room:
 		"MAIN HALL":
 			listener.set_physics_process(true)

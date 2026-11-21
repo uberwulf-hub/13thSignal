@@ -47,7 +47,9 @@ var _alert_cool := 0.0
 var _rush_t := 0.0         # ...then it comes for the sound, fast
 var posed := false         # a catch scene is posing it; don't animate
 var _face_light: OmniLight3D
-var _search_left := 0      # spots left to check around where it lost you
+var _search_left := 0
+var _silent_t := 0.0       # creeping up: no clicks, no rasp
+var _crept := false        # already crept up during this investigation      # spots left to check around where it lost you
 
 
 func setup(s: Node) -> void:
@@ -382,9 +384,25 @@ func _physics_process(delta: float) -> void:
 					_checking = null
 					_next_locker()
 
+	# Close in on a noise and it goes QUIET: no clicks, no rasp, for a few
+	# seconds... then a breath, close by. (Survivor/Nightmare.)
+	if state == State.WANDER:
+		_crept = false
+	if not Game.is_explorer() and state == State.INVESTIGATE and not _crept \
+			and global_position.distance_to(player.global_position) < 12.0:
+		_crept = true
+		_silent_t = randf_range(3.0, 6.0)
+		_rasp.volume_db = -80.0
+	if _silent_t > 0.0:
+		_silent_t -= delta
+		if _silent_t <= 0.0:
+			_rasp.volume_db = -4.0
+			_breath.play()
+		else:
+			_click_t = 0.4
 	# Echolocation clicks: faster when it's on to you.
 	_click_t -= delta
-	if _click_t <= 0.0:
+	if _click_t <= 0.0 and _silent_t <= 0.0:
 		var gap := {State.WANDER: 1.4, State.INVESTIGATE: 0.8, State.LISTEN: 0.6, State.HUNT: 0.32, State.CHECK_LOCKER: 0.5}
 		_click_t = float(gap[state]) * randf_range(0.8, 1.2)
 		_audio.pitch_scale = randf_range(0.9, 1.15)

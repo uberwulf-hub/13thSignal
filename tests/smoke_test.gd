@@ -959,6 +959,55 @@ func _ready() -> void:
 	await wait(0.3)
 	Game.fixed_layout = true
 
+	# --- The dread director and the quieter, smarter scares ---
+	Game.fixed_layout = true
+	Game.scary_unlocked = true
+	Game.mode = Game.Mode.SURVIVOR
+	s = load("res://scenes/sector.tscn").instantiate()
+	add_child(s)
+	await wait(1.0)
+	s.listener.set_physics_process(false)
+	s._power_on()
+	var dr = s.dread
+	dr._answer_cool = 0.0
+	dr.player_noise(s.player.global_position, 12.0)
+	check(dr._answer_cool > 0.0, "running makes the facility answer (a chime from the nearest intercom)")
+	s.player.global_position = s.cell_to_world(Vector2i(12, 7))
+	s.player.look_at_yaw(-PI / 2.0)
+	await wait(0.2)
+	dr._lights_out_behind()
+	await wait(3.0)
+	var dimmed := 0
+	for l in s.lights:
+		if l.get("dimmed", false):
+			dimmed += 1
+	check(dimmed >= 2, "lights go out behind you, one by one (%d)" % dimmed)
+	s.player.look_at_yaw(PI / 2.0)
+	await wait(0.2)
+	dr._leak_13()
+	var leaked := false
+	for l in s.floor_labels:
+		if l.text == "SECTOR 13":
+			leaked = true
+	check(leaked, "a room name on the floor reads SECTOR 13 while you aren't looking")
+	var lis3 = s.listener
+	lis3.reset_to(s.player.global_position + Vector3(9, 0, 0))
+	lis3.state = lis3.State.INVESTIGATE
+	lis3._go_to(s.player.global_position)
+	lis3.set_physics_process(true)
+	await wait(0.3)
+	check(lis3._silent_t > 0.0, "creeping up on a noise, the Listener goes silent")
+	lis3.set_physics_process(false)
+	s.queue_free()
+	await wait(0.3)
+	s = load("res://scenes/sector_6.tscn").instantiate()
+	add_child(s)
+	await wait(0.6)
+	check(s.props.size() > 0, "Sector 6 keeps track of its prop mannequins (%d)" % s.props.size())
+	s.queue_free()
+	await wait(0.3)
+	Game.mode = Game.Mode.EXPLORER
+
 	Game.lock_scary_modes()
 	print("\n%s (%d failed)" % ["ALL PASSED" if failures == 0 else "SOME TESTS FAILED", failures])
 	get_tree().quit(1 if failures > 0 else 0)

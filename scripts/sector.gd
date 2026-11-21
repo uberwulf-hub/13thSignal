@@ -119,6 +119,8 @@ var doors: Dictionary = {}       # Vector2i -> door
 var lockers: Array = []
 var grates: Dictionary = {}      # Vector2i -> true
 var wander_cells: Array[Vector2i] = []
+var floor_labels: Array = []     # the room names stencilled on the floor
+var dread: Node                  # the dread director (dread.gd)
 var lights: Array = []           # [{light, fixture, flicker}]
 var intercoms: Array = []        # [{cell, lamp}]
 var traps: Array = []
@@ -186,6 +188,8 @@ func _ready() -> void:
 	add_child(hud)
 	_spawn_actors()
 	_spawn_loot()
+	dread = preload("res://scripts/dread.gd").new().setup(self)
+	add_child(dread)
 	# Whatever you carried out of the last sector comes with you.
 	var carried: Array = Game.carried_for(sector_id)
 	if not carried.is_empty():
@@ -748,6 +752,7 @@ func _build_rooms(stripe_mat: Material) -> void:
 			l.rotation = Vector3(-PI / 2.0, PI / 2.0 if along_z else 0.0, 0)
 			l.position = center + Vector3(0, 0.03, 0)
 			add_child(l)
+			floor_labels.append(l)
 		# Ceiling lights.
 		if room_name == "CRAWLSPACE":
 			continue
@@ -1356,6 +1361,8 @@ func near_glow(pos: Vector3, radius: float) -> bool:
 
 
 func emit_noise(pos: Vector3, radius: float, from_player: bool) -> void:
+	if from_player and dread:
+		dread.player_noise(pos, radius)
 	if listener and listener.is_physics_processing():
 		listener.hear(pos, radius, from_player)
 
@@ -2052,7 +2059,7 @@ func _process(delta: float) -> void:
 				l["fixture"].visible = true
 	else:
 		for l in lights:
-			if l["flicker"] and not l.get("off", false):
+			if l["flicker"] and not l.get("off", false) and not l.get("dimmed", false):
 				var on := randf() > 0.04
 				l["light"].visible = on
 				l["fixture"].visible = on
