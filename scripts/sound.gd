@@ -333,6 +333,7 @@ func _generate() -> void:
 	_set_variants("surf_metal", 4, func(): return _strike(1.3, 0.004, 0.5, [[118.0, 5.0, 0.6], [212.0, 6.0, 1.0], [397.0, 8.0, 0.8], [641.0, 11.0, 0.6], [988.0, 15.0, 0.45], [1520.0, 20.0, 0.3], [2270.0, 28.0, 0.2]], 0.3))
 	_set_variants("surf_glass", 4, func(): return _strike(0.8, 0.002, 0.8, [[148.0, 14.0, 0.7], [1270.0, 16.0, 1.0], [2930.0, 22.0, 0.6], [4610.0, 32.0, 0.35]], 0.25))
 	_set_variants("surf_mannequin", 4, func(): return _surf_mannequin())
+	_set_variants("surf_wood", 4, func(): return _strike(0.4, 0.003, 0.5, [[180.0, 30.0, 1.0], [420.0, 40.0, 0.7], [910.0, 60.0, 0.35]], 0.5))
 	_set_variants("mq_hit_reaction", 3, func(): return _mq_hit_reaction())
 	# The elevator: an old, cracked chime; heavy doors grinding along their
 	# track; a halogen tube buzzing at mains frequency, and its crackle as it fails.

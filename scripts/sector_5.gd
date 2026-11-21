@@ -101,6 +101,10 @@ func _configure() -> void:
 	echo_enabled = true
 
 
+func _no_furnish_rooms() -> Array:
+	return super._no_furnish_rooms() + SHIELDED
+
+
 func _no_spawn_rooms() -> Array:
 	return no_wander_rooms + SHIELDED
 

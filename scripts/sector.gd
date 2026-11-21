@@ -119,7 +119,8 @@ var doors: Dictionary = {}       # Vector2i -> door
 var lockers: Array = []
 var grates: Dictionary = {}      # Vector2i -> true
 var wander_cells: Array[Vector2i] = []
-var floor_labels: Array = []     # the room names stencilled on the floor
+var _hud_room := ""
+var floor_labels: Array = []     # the room name plates by the doors
 var dread: Node                  # the dread director (dread.gd)
 var lights: Array = []           # [{light, fixture, flicker}]
 var intercoms: Array = []        # [{cell, lamp}]
@@ -819,6 +820,7 @@ func _build_level() -> void:
 	_build_rooms(stripe_mat)
 	_dress_elevator()
 	_dress_walls()
+	_furnish_rooms()
 	_add_dust()
 
 
@@ -837,24 +839,6 @@ func _build_rooms(stripe_mat: Material) -> void:
 		var room_name: String = room[0]
 		var rect: Rect2i = room[1]
 		var center := Vector3((rect.position.x + (rect.size.x - 1) / 2.0) * S, 0, (rect.position.y + (rect.size.y - 1) / 2.0) * S)
-		# The room's name stencilled on the floor.
-		if room_name != "CRAWLSPACE" and room_name != "ELEVATOR":
-			var l := Label3D.new()
-			l.text = room_name if room_name != "MAIN HALL" else sector_title
-			# Stencilled along the room's long side, and small enough that the
-			# whole name fits (narrow halls and shafts got cut off before).
-			l.font_size = 96
-			l.outline_size = 0
-			var along_z := rect.size.y > rect.size.x
-			var long_m := float(maxi(rect.size.x, rect.size.y)) * S * 0.8
-			var short_m := float(mini(rect.size.x, rect.size.y)) * S * 0.6
-			var text_w := float(l.text.length()) * 96.0 * 0.62   # rough width in font pixels
-			l.pixel_size = minf(0.008, minf(long_m / text_w, short_m / 96.0))
-			l.modulate = Color(0.85, 0.88, 0.9, 0.55)
-			l.rotation = Vector3(-PI / 2.0, PI / 2.0 if along_z else 0.0, 0)
-			l.position = center + Vector3(0, 0.03, 0)
-			add_child(l)
-			floor_labels.append(l)
 		# Ceiling lights.
 		if room_name == "CRAWLSPACE":
 			continue
@@ -1140,10 +1124,17 @@ func _dress_walls() -> void:
 						_box(along * 0.74 + Vector3(0, 0.025, 0) + Vector3(absf(out.x), 0, absf(out.z)) * 0.06, vp - out * 0.01 + Vector3(0, -0.15 + i * 0.1, 0), steel)
 				elif roll < 0.4:
 					# A warning plate.
-					var wp := face - out * 0.02 + along * randf_range(-0.8, 0.8) + Vector3(0, 1.55, 0)
-					_box(along * 0.55 + Vector3(0, 0.32, 0) + Vector3(absf(out.x), 0, absf(out.z)) * 0.02, wp, plate)
+					var wtext: String = warnings[randi() % warnings.size()]
+					var lines := wtext.split("\n")
+					var longest := 0
+					for ln in lines:
+						longest = maxi(longest, ln.length())
+					var pw := maxf(0.4, longest * 28.0 * 0.62 * 0.0032 + 0.14)   # wide enough for the words
+					var ph := 0.12 + lines.size() * 28.0 * 0.0032 * 1.25
+					var wp := face - out * 0.02 + along * randf_range(-0.7, 0.7) + Vector3(0, 1.6, 0)
+					_box(along * pw + Vector3(0, ph, 0) + Vector3(absf(out.x), 0, absf(out.z)) * 0.02, wp, plate)
 					var l := Label3D.new()
-					l.text = warnings[randi() % warnings.size()]
+					l.text = wtext
 					l.font_size = 28
 					l.pixel_size = 0.0032
 					l.modulate = Color(0.08, 0.06, 0.02)
@@ -1167,6 +1158,270 @@ func _dress_walls() -> void:
 					vp2.material_override = steel
 					vp2.position = face - out * 0.12 + along * randf_range(-1.2, 1.2) + Vector3(0, WALL_H / 2.0, 0)
 					add_child(vp2)
+
+
+## SECTOR HOOK: rooms that get no furniture (puzzle rooms, safe rooms).
+func _no_furnish_rooms() -> Array:
+	return ["ELEVATOR", "CRAWLSPACE", ""]
+
+
+## Fill the rooms with what was left behind: furniture that suits each room,
+## pushed against the walls (the middle of every room stays clear, and nothing
+## goes near a door), some of it knocked over. Busy, but abandoned.
+func _furnish_rooms() -> void:
+	var used: Dictionary = {}
+	var skip := _no_furnish_rooms()
+	for r in rows:
+		for c in cols:
+			var cell := Vector2i(c, r)
+			if ch(cell) != "." or used.has(cell):
+				continue
+			var room := room_at(cell)
+			if room in skip or cell == start_cell:
+				continue
+			var near_door := false
+			for dy in range(-1, 2):
+				for dx in range(-1, 2):
+					if not ch(cell + Vector2i(dx, dy)) in [".", "#", "g", "L", "f", "M", "R", "1", "2", "3", "4"]:
+						near_door = true
+			if near_door:
+				continue
+			for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+				if ch(cell + d) != "#" or ch(cell - d) == "#" or randf() > 0.42:
+					continue   # against a wall, never in a one-square corridor
+				var wall_nb := 0
+				for d2 in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+					if ch(cell + d + d2) == "#":
+						wall_nb += 1
+				if wall_nb < 2:
+					continue   # that "wall" is a free-standing pillar: keep around it clear
+				used[cell] = true
+				_place_furniture(cell, Vector3(d.x, 0, d.y), room)
+				break
+	_door_signs()
+
+
+## What a room would have had in it, by its name.
+func _furniture_kinds(room: String) -> Array:
+	if "OFFICE" in room or "SECURITY" in room or "CONTROL" in room or "ARRIVAL" in room:
+		return ["desk", "desk", "cabinet", "chair", "shelf", "bin", "papers"]
+	if "RECORD" in room or "ARCHIVE" in room or "SERVER" in room:
+		return ["shelf", "shelf", "cabinet", "cabinet", "boxes", "papers"]
+	if "STORAGE" in room or "STOCK" in room or "ARMORY" in room or "STORE" in room:
+		return ["crates", "crates", "shelf", "boxes", "barrel", "cart"]
+	if "BREAK" in room:
+		return ["table", "chair", "chair", "vending", "bin"]
+	if "LAB" in room:
+		return ["labbench", "labbench", "cart", "cabinet", "chair", "bin"]
+	if "SHOWROOM" in room:
+		return ["plinth", "boxes", "crates", "chair"]
+	if "HALL" in room:
+		return ["bench", "cart", "crates", "bin", "boxes", "barrel", "chair", "papers"]
+	return ["crates", "boxes", "chair", "cabinet", "bin", "papers"]
+
+
+func _place_furniture(cell: Vector2i, out: Vector3, room: String) -> void:
+	var kinds := _furniture_kinds(room)
+	var kind: String = kinds[randi() % kinds.size()]
+	var along := Vector3(absf(out.z), 0, absf(out.x))
+	var root := Node3D.new()
+	root.position = cell_to_world(cell) + out * (S / 2.0 - 0.45) + along * randf_range(-0.6, 0.6)
+	root.rotation.y = atan2(-out.x, -out.z)   # its front faces into the room
+	add_child(root)
+	var wood := _mat(Color(0.32, 0.24, 0.16), 0.8)
+	var metal := _mat(Color(0.35, 0.37, 0.38), 0.45, 0.7)
+	var grey := _mat(Color(0.25, 0.26, 0.27), 0.6, 0.5)
+	var card := _mat(Color(0.45, 0.35, 0.22), 0.95)
+	var solid := Vector3.ZERO      # collision box size (zero = you can walk through it)
+	var surface := "metal"
+	match kind:
+		"desk":
+			_box(Vector3(1.4, 0.05, 0.7), Vector3(0, 0.76, 0), wood, root)
+			for x in [-0.64, 0.64]:
+				_box(Vector3(0.05, 0.74, 0.65), Vector3(x, 0.37, 0), grey, root)
+			if randf() < 0.6:
+				_box(Vector3(0.45, 0.32, 0.06), Vector3(randf_range(-0.3, 0.3), 0.98, 0.15), _mat(Color(0.08, 0.08, 0.09), 0.3, 0.2), root)   # an old monitor
+			if randf() < 0.5:
+				_box(Vector3(0.22, 0.01, 0.3), Vector3(randf_range(-0.5, 0.5), 0.79, -0.1), _mat(Color(0.85, 0.83, 0.75), 0.9), root).rotation.y = randf() * TAU
+			solid = Vector3(1.4, 0.8, 0.7)
+			surface = "wood"
+		"table":
+			_box(Vector3(1.2, 0.05, 1.0), Vector3(0, 0.74, 0.1), wood, root)
+			_box(Vector3(0.08, 0.72, 0.08), Vector3(0, 0.36, 0.1), grey, root)
+			solid = Vector3(1.2, 0.78, 1.0)
+			surface = "wood"
+		"chair":
+			var chair := _chair(grey, wood)
+			root.add_child(chair)
+			chair.position.z = 0.2
+			chair.rotation.y = randf_range(-0.8, 0.8)
+			if randf() < 0.35:
+				chair.rotation.z = PI / 2.0   # knocked over
+				chair.position.y = 0.22
+		"cabinet":
+			_box(Vector3(0.5, 1.35, 0.6), Vector3(0, 0.675, 0), grey, root)
+			for k in 4:
+				_box(Vector3(0.44, 0.02, 0.01), Vector3(0, 0.3 + k * 0.32, 0.305), metal, root)
+			if randf() < 0.5:
+				_box(Vector3(0.44, 0.26, 0.4), Vector3(0, 0.3 + randi_range(0, 3) * 0.32 - 0.14, 0.45), grey, root)   # a drawer left open
+			solid = Vector3(0.5, 1.35, 0.6)
+		"shelf":
+			for x in [-0.6, 0.6]:
+				_box(Vector3(0.04, 2.0, 0.45), Vector3(x, 1.0, 0), metal, root)
+			for k in 4:
+				var y := 0.15 + k * 0.6
+				_box(Vector3(1.24, 0.03, 0.45), Vector3(0, y, 0), metal, root)
+				for b in randi_range(0, 3):
+					var bs := Vector3(randf_range(0.2, 0.35), randf_range(0.15, 0.3), 0.3)
+					_box(bs, Vector3(randf_range(-0.45, 0.45), y + bs.y / 2.0 + 0.015, 0), card, root)
+			solid = Vector3(1.3, 2.0, 0.45)
+		"crates":
+			for k in randi_range(1, 3):
+				var cs := randf_range(0.5, 0.75)
+				var crate := _box(Vector3(cs, cs, cs), Vector3(randf_range(-0.3, 0.3), cs / 2.0 + (0.0 if k == 0 else 0.0), randf_range(-0.1, 0.2)), wood, root)
+				crate.rotation.y = randf_range(-0.4, 0.4)
+				if k > 0:
+					crate.position = Vector3(randf_range(-0.2, 0.2), 0.62 * k + cs / 2.0 - 0.05, 0)
+			solid = Vector3(0.9, 0.7, 0.8)
+			surface = "wood"
+		"boxes":
+			for k in randi_range(2, 4):
+				var bs := Vector3(randf_range(0.3, 0.5), randf_range(0.25, 0.4), randf_range(0.3, 0.45))
+				var bx := _box(bs, Vector3(randf_range(-0.5, 0.5), bs.y / 2.0, randf_range(-0.1, 0.3)), card, root)
+				bx.rotation.y = randf() * TAU
+		"bin":
+			var mi := MeshInstance3D.new()
+			var cm := CylinderMesh.new()
+			cm.top_radius = 0.2
+			cm.bottom_radius = 0.17
+			cm.height = 0.55
+			mi.mesh = cm
+			mi.material_override = grey
+			mi.position = Vector3(randf_range(-0.4, 0.4), 0.275, 0.1)
+			root.add_child(mi)
+			if randf() < 0.3:
+				mi.rotation.z = PI / 2.0   # knocked over
+				mi.position.y = 0.2
+		"barrel":
+			var bm := MeshInstance3D.new()
+			var bc := CylinderMesh.new()
+			bc.top_radius = 0.3
+			bc.bottom_radius = 0.3
+			bc.height = 0.9
+			bm.mesh = bc
+			bm.material_override = _mat(Color(0.3, 0.12, 0.08), 0.6, 0.6)
+			bm.position = Vector3(0, 0.45, 0.05)
+			root.add_child(bm)
+			solid = Vector3(0.6, 0.9, 0.6)
+		"cart":
+			_box(Vector3(0.9, 0.04, 0.55), Vector3(0, 0.75, 0.1), metal, root)
+			_box(Vector3(0.9, 0.04, 0.55), Vector3(0, 0.3, 0.1), metal, root)
+			for x in [-0.42, 0.42]:
+				for z in [-0.15, 0.35]:
+					_box(Vector3(0.03, 0.75, 0.03), Vector3(x, 0.4, z), metal, root)
+			if randf() < 0.6:
+				_box(Vector3(0.35, 0.25, 0.3), Vector3(0.1, 0.9, 0.1), card, root)
+			root.rotation.y += randf_range(-0.5, 0.5)
+			solid = Vector3(0.9, 0.8, 0.6)
+		"bench":
+			_box(Vector3(1.8, 0.06, 0.4), Vector3(0, 0.45, 0.05), wood, root)
+			for x in [-0.8, 0.8]:
+				_box(Vector3(0.05, 0.43, 0.38), Vector3(x, 0.22, 0.05), metal, root)
+			solid = Vector3(1.8, 0.48, 0.4)
+			surface = "wood"
+		"labbench":
+			_box(Vector3(2.0, 0.06, 0.75), Vector3(0, 0.9, 0), _mat(Color(0.12, 0.13, 0.13), 0.3, 0.2), root)
+			_box(Vector3(1.96, 0.85, 0.7), Vector3(0, 0.43, 0), grey, root)
+			for k in randi_range(1, 4):
+				var bottle := MeshInstance3D.new()
+				var bcm := CylinderMesh.new()
+				bcm.top_radius = 0.03
+				bcm.bottom_radius = 0.05
+				bcm.height = randf_range(0.15, 0.3)
+				bottle.mesh = bcm
+				var glass := _mat(Color(0.4, 0.6, 0.55, 0.6), 0.05, 0.1)
+				glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+				bottle.material_override = glass
+				bottle.position = Vector3(randf_range(-0.8, 0.8), 0.93 + bcm.height / 2.0, randf_range(-0.2, 0.2))
+				root.add_child(bottle)
+			if randf() < 0.6:
+				_box(Vector3(0.5, 0.35, 0.4), Vector3(randf_range(-0.6, 0.6), 1.11, -0.1), _mat(Color(0.7, 0.7, 0.66), 0.5, 0.3), root)   # an instrument
+			solid = Vector3(2.0, 0.95, 0.75)
+		"vending":
+			_box(Vector3(0.9, 1.9, 0.75), Vector3(0, 0.95, 0), _mat(Color(0.35, 0.08, 0.08), 0.5, 0.4), root)
+			_box(Vector3(0.6, 1.1, 0.02), Vector3(-0.08, 1.15, 0.38), _glow(Color(0.5, 0.55, 0.6), 0.25), root)
+			solid = Vector3(0.9, 1.9, 0.75)
+		"plinth":
+			_box(Vector3(0.8, 0.5, 0.8), Vector3(0, 0.25, 0.1), _mat(Color(0.7, 0.68, 0.62), 0.6), root)
+			solid = Vector3(0.8, 0.5, 0.8)
+			surface = "concrete"
+		"papers":
+			for k in randi_range(3, 7):
+				var pq := _flat_quad(Vector2(0.22, 0.3), _mat(Color(0.8, 0.78, 0.7), 0.95))
+				pq.position = Vector3(randf_range(-0.8, 0.8), 0.006 + k * 0.001, randf_range(-0.6, 0.6))
+				pq.rotation = Vector3(-PI / 2.0, randf() * TAU, 0)
+				root.add_child(pq)
+	if solid != Vector3.ZERO:
+		var body := StaticBody3D.new()
+		body.collision_layer = 1
+		body.collision_mask = 0
+		body.set_meta("surface", surface)
+		root.add_child(body)
+		var cs := CollisionShape3D.new()
+		var bs := BoxShape3D.new()
+		bs.size = solid
+		cs.shape = bs
+		cs.position = Vector3(0, solid.y / 2.0, 0)
+		body.add_child(cs)
+
+
+func _chair(frame: Material, seat: Material) -> Node3D:
+	var ch3 := Node3D.new()
+	_box(Vector3(0.45, 0.05, 0.45), Vector3(0, 0.45, 0), seat, ch3)
+	_box(Vector3(0.45, 0.45, 0.04), Vector3(0, 0.7, -0.2), seat, ch3)
+	for x in [-0.2, 0.2]:
+		for z in [-0.2, 0.2]:
+			_box(Vector3(0.03, 0.45, 0.03), Vector3(x, 0.22, z), frame, ch3)
+	return ch3
+
+
+## Room name plates on the wall beside each doorway, on both sides, telling
+## you where the door leads. (The room you're in shows at the top right too.)
+func _door_signs() -> void:
+	for cell in doors:
+		var dirs: Array = []
+		for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+			if ch(cell + d) != "#" and ch(cell - d) != "#":
+				dirs.append(d)
+		for d in dirs:
+			var here := room_at(cell + d)
+			var there := room_at(cell - d)
+			if there == "" or there == here or there == "CRAWLSPACE":
+				continue
+			# The wall beside the door, on the side you're standing.
+			var perp := Vector2i(d.y, d.x)
+			if ch(cell + perp) != "#":
+				perp = -perp
+			if ch(cell + perp) != "#":
+				continue
+			var out := Vector3(d.x, 0, d.y)
+			var side := Vector3(perp.x, 0, perp.y)
+			var p := cell_to_world(cell) + out * (S / 2.0 + 0.03) + side * (S / 2.0 + 0.55) + Vector3(0, 1.85, 0)
+			var name: String = there
+			var w := maxf(0.5, name.length() * 26.0 * 0.62 * 0.0032 + 0.16)
+			var along := Vector3(absf(side.x), 0, absf(side.z))
+			var depth := Vector3(absf(out.x), 0, absf(out.z))
+			_box(along * w + Vector3(0, 0.2, 0) + depth * 0.025, p, _mat(Color(0.12, 0.16, 0.2), 0.5, 0.4))
+			var l := Label3D.new()
+			l.text = name
+			l.font_size = 26
+			l.pixel_size = 0.0032
+			l.modulate = Color(0.85, 0.88, 0.82)
+			l.outline_size = 0
+			l.position = p + out * 0.016
+			l.rotation.y = atan2(out.x, out.z)
+			add_child(l)
+			floor_labels.append(l)
 
 
 ## A flat, see-through mark (grime, stains, streaks).
@@ -2239,6 +2494,9 @@ func _check_player_cell() -> void:
 		return
 	_last_cell = c
 	var room := room_at(c)
+	if room != "" and room != _hud_room:
+		_hud_room = room
+		hud.set_room(room)
 	if room != "" and not visited.has(room):
 		visited[room] = true
 		_entered_room(room)

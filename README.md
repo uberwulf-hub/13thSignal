@@ -96,7 +96,9 @@ Items always stay in the same room, so the way through still works.
 
 **The story across a run.** Every sector hides one record about the 13th sector, somewhere new each game. MERIDIAN changes as you go down: steady at first, then pausing and correcting itself, then borrowing ECHO's words (not in Explorer), and in Sector 6 it admits its map is incomplete. Three notes first heard in the relays keep coming back: ECHO hums them, the showroom plays them. At Sector 6's elevator, you choose what to power with the last spare line: the ROUTE MAP (it shows a 13th sector) or the CAB LIGHTS (a calm ride down). Each changes MERIDIAN's last line. As the doors close, the elevator shows your route ("INCOMPLETE [13]" if you found 4+ records, outside Explorer). Then the three notes play once more... with one missing.
 
-**The facility notices you.** Run, or clang across a grate, and the nearest intercom answers with a clipped chime. Lights go out behind you one by one, and come back later. A room's name on the floor might read SECTOR 13 while you aren't looking. ECHO plays back your own footsteps from where you made them, plus one you didn't. In Survivor and Nightmare it gets worse:
+Rooms are labelled on plates beside each doorway, and the room you're in shows at the top right.
+
+**The facility notices you.** Run, or clang across a grate, and the nearest intercom answers with a clipped chime. Lights go out behind you one by one, and come back later. A room's name plate might read SECTOR 13 while you aren't looking. ECHO plays back your own footsteps from where you made them, plus one you didn't. In Survivor and Nightmare it gets worse:
 - The Listener goes silent as it closes in on a noise, then breathes close by.
 - You might hear footsteps where nobody is, then a pipe taps twice in the same spot. Learn the difference.
 - MERIDIAN might say something only ECHO has said.

@@ -26,6 +26,7 @@ var _hotbar: HBoxContainer
 var _slots: Array = []   # [Button]
 var _mode_label: Label
 var _frag_label: Label
+var _room_label: Label
 var _noise_bar: ProgressBar
 var _stamina_bar: ProgressBar
 var _battery_bar: ProgressBar
@@ -155,6 +156,13 @@ void fragment() {
 	_frag_label = _label("", 16, Color(0.7, 0.6, 1.0))
 	_frag_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	_frag_label.position += Vector2(-260, 44)
+	# Where you are: the room's name, under the mode.
+	_room_label = _label("", 17, Game.INK)
+	_room_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_room_label.position += Vector2(-420, 68)
+	_room_label.custom_minimum_size.x = 396
+	_room_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_root.add_child(_room_label)
 	_frag_label.custom_minimum_size.x = 236
 	_frag_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_root.add_child(_frag_label)
@@ -561,6 +569,17 @@ func flash_black(seconds: float) -> void:
 	var t := create_tween()
 	t.tween_interval(seconds)
 	t.tween_property(_fade, "color:a", 0.0, 0.3)
+
+
+## You walked into a new room: its name shows brightly, then settles to dim.
+func set_room(room: String) -> void:
+	if _room_label == null:
+		return
+	_room_label.text = room
+	_room_label.modulate.a = 1.0
+	var t := create_tween()
+	t.tween_interval(2.0)
+	t.tween_property(_room_label, "modulate:a", 0.5, 1.5)
 
 
 ## Cutscenes: hide everything except the fade-to-black.
